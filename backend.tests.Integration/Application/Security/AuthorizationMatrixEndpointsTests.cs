@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using backend.main.application.security;
 using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.features.clubs.staff;
@@ -46,11 +47,18 @@ public class AuthorizationMatrixEndpointsTests
             .Where(endpoint => endpoint.Access == RuntimeEndpointAccess.Protected)
             .ToArray();
         var failures = new List<string>();
+        // Endpoints with [ValidateAntiForgeryToken] refuse an unsafe request without the CSRF pair
+        // (400) before authentication challenges, so probes carry a valid pair, as a browser does,
+        // to isolate the authentication answer. The client keeps the antiforgery cookie.
+        var csrfToken = await app.GetCsrfTokenAsync();
 
         foreach (var endpoint in protectedEndpoints)
         {
-            // No body, cookie, or token: authorization must answer before binding, CSRF, or the action.
-            var response = await app.Client.SendAsync(new HttpRequestMessage(new HttpMethod(endpoint.Method), endpoint.Path));
+            // No body or token: authorization must answer before binding or the action.
+            var request = new HttpRequestMessage(new HttpMethod(endpoint.Method), endpoint.Path);
+            if (endpoint.Method != "GET")
+                request.Headers.Add(CsrfConfiguration.CsrfHeaderName, csrfToken);
+            var response = await app.Client.SendAsync(request);
 
             if (!await IsAuthenticationChallengeAsync(response))
                 failures.Add($"{endpoint.Key} -> {(int)response.StatusCode} {await app.DescribeFailureAsync(response)}");

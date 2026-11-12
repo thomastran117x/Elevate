@@ -73,7 +73,7 @@ Port 8097 matters: it is written into the document's server URL.
 
 `backend.tests.Integration/Application/Security/` runs as its own `authorization` CI shard:
 - `AuthorizationMatrixEndpointsTests.cs` repeats the metadata check against the running app's routed endpoints, including hubs and minimal endpoints.
-- It sends an anonymous request to **every** protected endpoint and requires the `401` `UNAUTHORIZED` "Missing access token" envelope. It sends one to **every** public endpoint and requires that none of them answers with that challenge. The probes come from the routed endpoints themselves, not a hand-kept list.
+- It sends an anonymous request to **every** protected endpoint and requires the `401` `UNAUTHORIZED` "Missing access token" envelope. Unsafe methods carry a valid CSRF pair, because endpoints with `[ValidateAntiForgeryToken]` would otherwise answer 400 first. It sends one to **every** public endpoint and requires that none of them answers with that challenge. The probes come from the routed endpoints themselves, not a hand-kept list.
 - It also covers seeded public reads, the invalid-token and `403` envelopes, the `AdminOnly` policy against each global role, and club owner, manager, volunteer, unrelated-user, and admin access decided by the services.
 - `RuntimeEndpointAuthorizationAuditTests.cs` is the runtime negative fixture. A throwaway host routes a minimal API and a controller without authorization metadata, and the gate must name both. It needs no containers.
 
