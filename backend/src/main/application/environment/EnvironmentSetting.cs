@@ -63,6 +63,7 @@ namespace backend.main.application.environment
         private static readonly string? _twilioFromPhoneNumber;
         private static readonly bool _authSmsMfaEnrollmentEnabled;
         private static readonly string _totpEncryptionKey;
+        private static readonly IReadOnlyList<string> _totpEncryptionKeysPrevious;
         private static readonly string _appEnvironment;
         private static readonly string _logLevel;
         private const string DefaultJwtSecretAccess = "unit_test_secret_12345678901234567890";
@@ -220,6 +221,8 @@ namespace backend.main.application.environment
                 ["AUTH_TOTP_ENCRYPTION_KEY"],
                 DefaultTotpEncryptionKey
             );
+            // Decrypt-only keys from an overlapping rotation; see TotpSecretProtector.
+            _totpEncryptionKeysPrevious = ParseList(GetOptional(["AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS"]));
 
             _appEnvironment = (
                 GetOptional(["ENVIRONMENT", "ASPNETCORE_ENVIRONMENT", "DOTNET_ENVIRONMENT"])
@@ -344,6 +347,7 @@ namespace backend.main.application.environment
         public static bool AuthSmsMfaStepUpSmsEnabled =>
             GetBoolOrDefault(["AUTH_SMS_MFA_STEP_UP_SMS_ENABLED"], true);
         public static string TotpEncryptionKey => _totpEncryptionKey;
+        public static IReadOnlyList<string> TotpEncryptionKeysPrevious => _totpEncryptionKeysPrevious;
         public static bool AuthTotpMfaEnrollmentEnabled =>
             GetBoolOrDefault(["AUTH_TOTP_MFA_ENROLLMENT_ENABLED"], true);
         public static bool AuthTotpMfaStepUpEnabled =>
@@ -418,6 +422,26 @@ namespace backend.main.application.environment
             catch (FormatException)
             {
                 throw new InvalidOperationException("AUTH_TOTP_ENCRYPTION_KEY is not valid base64.");
+            }
+
+            foreach (var previous in _totpEncryptionKeysPrevious)
+            {
+                if (previous == DefaultTotpEncryptionKey || previous == _totpEncryptionKey)
+                    throw new InvalidOperationException(
+                        "AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS cannot contain the fallback value or the active AUTH_TOTP_ENCRYPTION_KEY."
+                    );
+
+                try
+                {
+                    if (Convert.FromBase64String(previous).Length != 32)
+                        throw new InvalidOperationException(
+                            "Each AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS key must decode to exactly 32 bytes."
+                        );
+                }
+                catch (FormatException)
+                {
+                    throw new InvalidOperationException("An AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS key is not valid base64.");
+                }
             }
 
             Logger.Info("Environment variables validated successfully.");

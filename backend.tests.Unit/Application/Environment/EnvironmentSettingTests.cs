@@ -269,6 +269,41 @@ public class EnvironmentSettingTests
         harness.Invoking(h => h.Validate()).Should().NotThrow();
     }
 
+    [Theory]
+    [InlineData("cHJvZHVjdGlvbl90b3RwX2tleV8zMmJ5dGVzMTIzNDU=", "*cannot contain the fallback value or the active AUTH_TOTP_ENCRYPTION_KEY*")]
+    [InlineData("dW5pdF90ZXN0X3RvdHBfZW5jcnlwdGlvbl9rZXkxMjM=", "*cannot contain the fallback value or the active AUTH_TOTP_ENCRYPTION_KEY*")]
+    [InlineData("c2hvcnQ=", "*must decode to exactly 32 bytes*")]
+    [InlineData("not base64!", "*is not valid base64*")]
+    public void Validate_ShouldRejectUnsafePreviousTotpKeys(string previous, string message)
+    {
+        var configuration = ProductionConfiguration(null);
+        configuration["AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS"] = previous;
+        using var scope = new EnvironmentVariableScope(configuration);
+
+        using var harness = EnvironmentSettingHarness.Load();
+
+        harness.Invoking(h => h.Validate())
+            .Should().Throw<TargetInvocationException>()
+            .WithInnerException<InvalidOperationException>()
+            .WithMessage(message);
+    }
+
+    [Fact]
+    public void TotpEncryptionKeysPrevious_ShouldParseACommaSeparatedListOfDecryptOnlyKeys()
+    {
+        var configuration = ProductionConfiguration(null);
+        configuration["AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS"] =
+            "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=, ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3ODk=";
+        using var scope = new EnvironmentVariableScope(configuration);
+
+        using var harness = EnvironmentSettingHarness.Load();
+
+        harness.GetStrings("TotpEncryptionKeysPrevious").Should().Equal(
+            "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+            "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3ODk=");
+        harness.Invoking(h => h.Validate()).Should().NotThrow();
+    }
+
     private static Dictionary<string, string?> ProductionConfiguration(string? previousAccessKeys) => new()
     {
         ["DOTNET_RUNNING_IN_CONTAINER"] = "true",

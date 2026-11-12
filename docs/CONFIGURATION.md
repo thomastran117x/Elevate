@@ -79,7 +79,7 @@ Backend gates remove disabled MVC actions/controllers from discovery and OpenAPI
 
 ## Security and application options
 
-Use strong deployment-specific JWT secrets and a valid `AUTH_TOTP_ENCRYPTION_KEY` rather than development fallbacks. Production validation rejects missing/default critical values. SMS enrollment, enforcement, and step-up are controlled by `AUTH_SMS_MFA_ENROLLMENT_ENABLED`, `AUTH_SMS_MFA_ENFORCEMENT_ENABLED`, and `AUTH_SMS_MFA_STEP_UP_SMS_ENABLED`. TOTP has `AUTH_TOTP_MFA_ENROLLMENT_ENABLED` and `AUTH_TOTP_MFA_STEP_UP_ENABLED`.
+Use strong deployment-specific JWT secrets and a valid `AUTH_TOTP_ENCRYPTION_KEY` rather than development fallbacks. Production validation rejects missing/default critical values. SMS enrollment, enforcement, and step-up are controlled by `AUTH_SMS_MFA_ENROLLMENT_ENABLED`, `AUTH_SMS_MFA_ENFORCEMENT_ENABLED`, and `AUTH_SMS_MFA_STEP_UP_SMS_ENABLED`. TOTP has `AUTH_TOTP_MFA_ENROLLMENT_ENABLED` and `AUTH_TOTP_MFA_STEP_UP_ENABLED`; its secrets are encrypted at rest as described in [TOTP secret encryption](#totp-secret-encryption).
 
 Appsettings sections configure CORS, forwarded headers, request timeouts, rate limiting, profile username cooldown, version retention, recurrence, image upload limits, image processing, and orphan-blob cleanup. `Profile__UsernameChangeCooldownDays` is the normal nested override; Compose maps the template's uppercase `PROFILE__USERNAMECHANGECOOLDOWNDAYS` into it. Inspect options classes for accepted names and defaults rather than assuming all keys are flattened template variables.
 
@@ -174,6 +174,14 @@ The worker validates them at startup and refuses to start on an out-of-range val
 Access tokens are HS256 JWTs signed with `JWT_SECRET_ACCESS`. Each token's header carries a `kid`: base64url of the first 8 bytes of SHA-256 of the key that signed it. `JWT_SECRET_ACCESS_PREVIOUS` is an optional comma-separated list of earlier keys. They are accepted for validation only and never sign, so a rotation can overlap instead of signing everyone out. Tokens issued before `kid` support have no `kid`, and are checked against every key.
 
 To rotate, move the current key into `JWT_SECRET_ACCESS_PREVIOUS` and set a new `JWT_SECRET_ACCESS`. Remove the previous key once its tokens have expired, which is 15 minutes plus 30 seconds of clock skew. To roll back, swap the two values. Refresh tokens, verification proofs, and TOTP secrets do not depend on this key, so a rotation leaves sessions intact. Outside development, each previous key must be at least 32 bytes and differ from both the active key and the fallback value. The full procedure is in [key rotation](operations/key-rotation.md).
+
+### TOTP secret encryption
+
+TOTP shared secrets are stored with AES-256-GCM under `AUTH_TOTP_ENCRYPTION_KEY`, which is base64 of exactly 32 bytes. New secrets use the format `v2:{kid}:{base64(nonce, tag, ciphertext)}`, where `kid` is base64url of the first 8 bytes of SHA-256 of the key. Secrets written before key ids use `v1:{...}` and are tried against every configured key.
+
+`AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS` is an optional comma-separated list of earlier keys, used only for decryption. While it is set, the API re-encrypts stored secrets under the active key at startup and then hourly. Each row is replaced with a conditional update, so replicas sweeping at the same time, or a user re-enrolling, never lose a change. The API logs counts only: how many secrets were re-encrypted, changed concurrently, could not be decrypted with any configured key, and remain under a previous key.
+
+To rotate, move the current key into the previous list and set a new active key. Remove the previous key only after the log reports none remaining and none undecryptable. To roll back, swap the two values; the sweep moves secrets back. A secret naming a key that is not configured fails closed, and its TOTP verification fails rather than falling back. Outside development, previous keys must be 32 bytes of base64 and differ from both the active key and the fallback value. The full procedure is in [key rotation](operations/key-rotation.md).
 
 ### Refresh sessions
 

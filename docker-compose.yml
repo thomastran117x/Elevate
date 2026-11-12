@@ -124,6 +124,8 @@ services:
       AZURE_STORAGE_QUARANTINE_CONTAINER_NAME: "${AZURE_STORAGE_QUARANTINE_CONTAINER_NAME:-event-assets-quarantine}"
       # TOTP / MFA. Empty key => code uses the dev fallback (validated in prod).
       AUTH_TOTP_ENCRYPTION_KEY: "${AUTH_TOTP_ENCRYPTION_KEY:-}"
+      # Decrypt-only keys while a TOTP key rotation is under way; see docs/operations/key-rotation.md.
+      AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS: "${AUTH_TOTP_ENCRYPTION_KEYS_PREVIOUS:-}"
       AUTH_TOTP_MFA_ENROLLMENT_ENABLED: "${AUTH_TOTP_MFA_ENROLLMENT_ENABLED:-true}"
       AUTH_TOTP_MFA_STEP_UP_ENABLED: "${AUTH_TOTP_MFA_STEP_UP_ENABLED:-true}"
       Auth__AbuseProtection__KeyPrefix: "${AUTH_ABUSE_KEY_PREFIX:-auth:abuse:v1}"
