@@ -55,7 +55,7 @@ namespace backend.main.features.auth.device
 
         [HttpDelete("{deviceId:int}")]
         [RequireMfa]
-        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [EnableRateLimiting(RateLimiterConfiguration.SessionManagementPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<TrustedDeviceRevocationResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Revoke(int deviceId)
@@ -83,7 +83,7 @@ namespace backend.main.features.auth.device
 
         [HttpDelete]
         [RequireMfa]
-        [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+        [EnableRateLimiting(RateLimiterConfiguration.SessionManagementPolicyName)]
         [ProducesResponseType(typeof(ApiResponse<TrustedDeviceRevocationResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RevokeAll()
         {

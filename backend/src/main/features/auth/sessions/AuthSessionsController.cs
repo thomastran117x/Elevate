@@ -54,7 +54,7 @@ public sealed class AuthSessionsController : ControllerBase
     /// </summary>
     [HttpDelete("others")]
     [RequireMfa]
-    [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+    [EnableRateLimiting(RateLimiterConfiguration.SessionManagementPolicyName)]
     [ProducesResponseType(typeof(ApiResponse<SessionRevocationResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RevokeOthers()
     {
@@ -75,7 +75,7 @@ public sealed class AuthSessionsController : ControllerBase
 
     [HttpDelete("{sessionId}")]
     [RequireMfa]
-    [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+    [EnableRateLimiting(RateLimiterConfiguration.SessionManagementPolicyName)]
     [ProducesResponseType(typeof(ApiResponse<SessionRevocationResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object?>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Revoke(string sessionId)
@@ -100,7 +100,7 @@ public sealed class AuthSessionsController : ControllerBase
 
     [HttpDelete]
     [RequireMfa]
-    [EnableRateLimiting(RateLimiterConfiguration.AuthPolicyName)]
+    [EnableRateLimiting(RateLimiterConfiguration.SessionManagementPolicyName)]
     [ProducesResponseType(typeof(ApiResponse<SessionRevocationResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RevokeAll()
     {

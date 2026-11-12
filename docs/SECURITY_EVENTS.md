@@ -59,7 +59,7 @@ Login step-up email links and new-device links share `POST /api/auth/device/veri
 | `Outcome` | `succeeded`, `denied` (an expected refusal), `throttled`, or `faulted` (a service error). Clients never see this classification. |
 | `Reason` | A code from the closed set below; never exception or request text. |
 | `Method` | `password`, `google`, `microsoft`, `sms`, `totp`, `email`, `refresh_token`, or `recovery_code`. |
-| `Flow` | The flow, verification purpose, or throttled budget, such as `login`, `signup`, `password_reset`, `email_change`, `device_verification`, `login_step_up`, `session_step_up`, `mfa_delivery`, `mfa_enrollment`, `provider_link`, `provider_link_confirmation`, or `provider_unlink`. |
+| `Flow` | The flow, verification purpose, or throttled budget, such as `login`, `signup`, `password_reset`, `email_change`, `device_verification`, `login_step_up`, `session_step_up`, `mfa_delivery`, `mfa_enrollment`, `provider_link`, `provider_link_confirmation`, `provider_unlink`, or `session_management`. |
 | `Dimension` | For throttles: `source_ip`, `target`, `account`, `attempts`, `rate_limiter`, or `concurrency` (a request that lost a race for a verification lock). |
 | `Factor`, `Change` | For factor events: `sms`, `totp`, `password`, `email`, or `recovery_codes`; `enabled`, `disabled`, `removed`, `changed`, or `regenerated`. Recovery codes report `enabled` for an account's first set and `regenerated` when a set is replaced. |
 | `UserId` | The account the event is about, when known. It is stated by the code that emits the event and never inferred from a bearer token, since many auth endpoints are anonymous and act on a link, code, or name. The exception is `authz.denied`, which is about the caller. |

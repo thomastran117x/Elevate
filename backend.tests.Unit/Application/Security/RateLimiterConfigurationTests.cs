@@ -30,6 +30,7 @@ public class RateLimiterConfigurationTests
     [InlineData(RateLimiterConfiguration.AuthPolicyName, AuthSecurityFlow.General)]
     [InlineData(RateLimiterConfiguration.EmailAvailabilityPolicyName, AuthSecurityFlow.EmailAvailability)]
     [InlineData(RateLimiterConfiguration.EmailChangePolicyName, AuthSecurityFlow.EmailChange)]
+    [InlineData(RateLimiterConfiguration.SessionManagementPolicyName, AuthSecurityFlow.SessionManagement)]
     public void RecordAuthThrottle_ShouldRecordAuthenticationPolicyRejections(string policy, AuthSecurityFlow flow)
     {
         var securityEvents = new RecordingAuthSecurityEventEmitter();
@@ -106,14 +107,18 @@ public class RateLimiterConfigurationTests
         var caller = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "42")], "Test"));
         var emailChange = CreateContextForPolicy(RateLimiterConfiguration.EmailChangePolicyName, securityEvents);
         emailChange.User = caller;
+        var sessions = CreateContextForPolicy(RateLimiterConfiguration.SessionManagementPolicyName, securityEvents);
+        sessions.User = caller;
         var login = CreateContextForPolicy(RateLimiterConfiguration.AuthPolicyName, securityEvents);
         login.User = caller;
 
         RateLimiterConfiguration.RecordAuthThrottle(emailChange);
+        RateLimiterConfiguration.RecordAuthThrottle(sessions);
         RateLimiterConfiguration.RecordAuthThrottle(login);
 
         securityEvents.Events.Select(e => (e.Flow, e.UserId)).Should().Equal(
             (AuthSecurityFlow.EmailChange, 42),
+            (AuthSecurityFlow.SessionManagement, 42),
             (AuthSecurityFlow.General, (int?)null));
     }
 

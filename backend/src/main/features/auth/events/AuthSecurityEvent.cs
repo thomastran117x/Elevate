@@ -200,6 +200,7 @@ public enum AuthSecurityFlow
     ProviderLink,
     ProviderLinkConfirmation,
     ProviderUnlink,
+    SessionManagement,
 }
 
 public enum AuthThrottleDimension

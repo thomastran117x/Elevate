@@ -72,6 +72,17 @@ namespace backend.main.application.security
         /// enabled, so the budget is sized for filling a gallery a few times over rather than for
         /// bulk upload. Partitioned per account so it cannot be widened by changing network.
         /// </summary>
+        /// <summary>
+        /// Policy for signing out sessions and forgetting trusted devices. Per account rather than
+        /// sharing the auth policy's per-address budget with sign-in: someone who has just signed in
+        /// to throw out an intruder may need to end several sessions one by one, and must not be
+        /// locked out of doing so by the sign-in that got them there. Every request also needs a
+        /// fresh step-up, so this bounds cost, not guessing.
+        /// </summary>
+        public const string SessionManagementPolicyName = "session-management";
+        private const int SessionManagementPermitLimit = 30;
+        private static readonly TimeSpan SessionManagementWindow = TimeSpan.FromMinutes(10);
+
         public const string ImageUploadPolicyName = "image-upload";
         private const int ImageUploadPermitLimit = 30;
         private static readonly TimeSpan ImageUploadWindow = TimeSpan.FromMinutes(10);
@@ -93,14 +104,16 @@ namespace backend.main.application.security
                 UsernameSuggestionsPolicyName => AuthSecurityFlow.UsernameSuggestions,
                 EmailAvailabilityPolicyName => AuthSecurityFlow.EmailAvailability,
                 EmailChangePolicyName => AuthSecurityFlow.EmailChange,
+                SessionManagementPolicyName => AuthSecurityFlow.SessionManagement,
                 _ => null,
             };
             if (flow is null)
                 return;
 
-            // The email-change budget is per account and runs after authentication, so the
-            // throttled account is the caller. The other policies are anonymous and per address.
-            int? userId = policy == EmailChangePolicyName
+            // The email-change and session-management budgets are per account and run after
+            // authentication, so the throttled account is the caller. The other policies are
+            // anonymous and per address.
+            int? userId = policy is EmailChangePolicyName or SessionManagementPolicyName
                 && int.TryParse(httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var callerId)
                 ? callerId
                 : null;
@@ -139,6 +152,9 @@ namespace backend.main.application.security
             var imageUploadPermitLimit =
                 configuration?.GetValue<int?>("RateLimiter:ImageUploadPermitLimit")
                 ?? ImageUploadPermitLimit;
+            var sessionManagementPermitLimit =
+                configuration?.GetValue<int?>("RateLimiter:SessionManagementPermitLimit")
+                ?? SessionManagementPermitLimit;
 
             services.AddRateLimiter(options =>
             {
@@ -253,6 +269,19 @@ namespace backend.main.application.security
                         {
                             PermitLimit = emailChangePermitLimit,
                             Window = EmailChangeWindow,
+                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                            QueueLimit = 0
+                        });
+                });
+
+                options.AddPolicy(SessionManagementPolicyName, context =>
+                {
+                    return RateLimitPartition.GetFixedWindowLimiter(
+                        $"session-management:{GetPartitionKey(context)}",
+                        _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = sessionManagementPermitLimit,
+                            Window = SessionManagementWindow,
                             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                             QueueLimit = 0
                         });
