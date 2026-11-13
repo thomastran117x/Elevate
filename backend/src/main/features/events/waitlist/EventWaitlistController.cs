@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.events.waitlist.contracts.requests;
 using backend.main.features.events.waitlist.contracts.responses;
 using backend.main.shared.exceptions.http;
@@ -32,6 +33,7 @@ namespace backend.main.features.events.waitlist
 
         [Authorize]
         [HttpPost("{eventId}/waitlist")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventWaitlistEntryResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> Join(
             [Range(1, int.MaxValue)] int eventId,
@@ -85,6 +87,7 @@ namespace backend.main.features.events.waitlist
 
         [Authorize]
         [HttpGet("{eventId}/waitlist/me")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<MyWaitlistStatusResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetMyStatus([Range(1, int.MaxValue)] int eventId)
         {
@@ -111,6 +114,7 @@ namespace backend.main.features.events.waitlist
 
         [Authorize]
         [HttpGet("{eventId}/waitlist")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventWaitlistEntryResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetWaitlist(
             [Range(1, int.MaxValue)] int eventId,
@@ -147,6 +151,7 @@ namespace backend.main.features.events.waitlist
 
         [Authorize]
         [HttpDelete("{eventId}/waitlist/{entryId}")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RemoveEntry(
             [Range(1, int.MaxValue)] int eventId,
@@ -174,6 +179,7 @@ namespace backend.main.features.events.waitlist
 
         [Authorize]
         [HttpPost("{eventId}/waitlist/promote")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<WaitlistPromotionResultResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> PromoteNext([Range(1, int.MaxValue)] int eventId)
         {

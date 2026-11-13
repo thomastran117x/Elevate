@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.events;
 using backend.main.features.events.registration;
 using backend.main.features.events.registration.contracts.requests;
@@ -35,6 +36,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpPost("{eventId}/register")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status201Created)]
         public async Task<IActionResult> Register(
             [Range(1, int.MaxValue)] int eventId,
@@ -62,6 +64,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpDelete("{eventId}/register")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> Unregister([Range(1, int.MaxValue)] int eventId)
         {
@@ -87,6 +90,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpPatch("{eventId}/register")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventRegistrationResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateRegistration(
             [Range(1, int.MaxValue)] int eventId,
@@ -114,6 +118,7 @@ namespace backend.main.features.events.registration
         }
 
         [HttpGet("{eventId}/registrations")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventRegistrationResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetRegistrations([Range(1, int.MaxValue)] int eventId, [Range(1, int.MaxValue)] int page = 1, [Range(1, 100)] int pageSize = 20)
@@ -143,6 +148,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpGet("{eventId}/registrations/me")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> CheckRegistration([Range(1, int.MaxValue)] int eventId)
         {
@@ -269,6 +275,7 @@ namespace backend.main.features.events.registration
 
         [Authorize]
         [HttpGet("{userId}/events/registered")]
+        [RequirePermission(PermissionNames.UserSelfOrAdmin, "userId", DenialMessage = "You can only view your own registrations.")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventRegistrationResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetRegisteredEvents([Range(1, int.MaxValue)] int userId, [Range(1, int.MaxValue)] int page = 1, [Range(1, 100)] int pageSize = 20)
         {

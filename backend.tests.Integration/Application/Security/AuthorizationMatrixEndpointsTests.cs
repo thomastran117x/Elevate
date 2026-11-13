@@ -15,6 +15,7 @@ using FluentAssertions;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 
 namespace backend.tests.Integration.Application.Security;
 
@@ -351,6 +352,38 @@ public class AuthorizationMatrixEndpointsTests
         await AssertStatusAsync(app, outsider.AccessToken, HttpMethod.Get, "/api/events/series/987654", HttpStatusCode.NotFound);
         await AssertStatusAsync(app, outsider.AccessToken, HttpMethod.Get, "/api/events/987654/manage", HttpStatusCode.NotFound);
         await AssertStatusAsync(app, owner.AccessToken, HttpMethod.Get, $"/api/events/{eventId}/manage", HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task ParticipantRecords_ShouldBeReadableByTheirOwnerOnly()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateSessionAsync(app, "authz-self-owner@example.com", "Organizer");
+        var payer = await CreateSessionAsync(app, "authz-self-payer@example.com", "Participant");
+        var other = await CreateSessionAsync(app, "authz-self-other@example.com", "Participant");
+        var payerUser = (await app.FindUserByEmailAsync("authz-self-payer@example.com"))!;
+
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Authz Self Club");
+        var eventId = await CreatePublishedEventAsync(app, owner.AccessToken, clubId, "Authz Self Event");
+        await app.AddPaymentAsync(eventId, payerUser.Id, backend.main.features.payment.PaymentStatus.Succeeded);
+        var paymentId = await app.QueryDbAsync(db => db.Payments
+            .Where(payment => payment.UserId == payerUser.Id)
+            .Select(payment => payment.Id)
+            .SingleAsync());
+
+        await AssertStatusAsync(app, payer.AccessToken, HttpMethod.Get, $"/api/payments/{paymentId}", HttpStatusCode.OK);
+        await AssertRefusedAsync(app, other.AccessToken, HttpMethod.Get, $"/api/payments/{paymentId}", "Not allowed.");
+        await AssertRefusedAsync(app, other.AccessToken, HttpMethod.Post, $"/api/payments/{paymentId}/refund", "Not allowed.");
+        await AssertStatusAsync(app, other.AccessToken, HttpMethod.Get, "/api/payments/987654", HttpStatusCode.NotFound);
+
+        await AssertStatusAsync(app, payer.AccessToken, HttpMethod.Get,
+            $"/api/users/{payerUser.Id}/events/registered", HttpStatusCode.OK);
+        await AssertRefusedAsync(app, other.AccessToken, HttpMethod.Get,
+            $"/api/users/{payerUser.Id}/events/registered", "You can only view your own registrations.");
+
+        // Participation in a visible event is open to any signed-in user; managers alone see the waitlist.
+        await AssertStatusAsync(app, other.AccessToken, HttpMethod.Get, $"/api/events/{eventId}/registrations/me", HttpStatusCode.OK);
+        await AssertRefusedAsync(app, other.AccessToken, HttpMethod.Get, $"/api/events/{eventId}/waitlist", "Not allowed");
     }
 
     private static async Task AssertRefusedAsync(
