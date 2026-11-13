@@ -26,7 +26,7 @@ Owner: **security lead** (see [ownership](ownership.md)). Cadence: January, Apri
 
 - [ ] Every change to `backend.tests.Unit/Application/Security/ReviewedPublicSurface.cs` since the last review was intended. Run `git log --since=<last review> -- backend.tests.Unit/Application/Security/ReviewedPublicSurface.cs`.
 - [ ] The Auth Contract Gate and the `authorization` integration shard passed on `main` for the whole quarter.
-- [ ] Resource authorization rules match the role and ownership matrix in [API](../API.md).
+- [ ] Resource authorization rules match the approved permission matrix in [authorization](../AUTHORIZATION.md), and every change to `ApprovedPermissionMatrix.cs` or `PermissionExpectations.cs` since the last review was intended.
 
 ## Monitoring and response
 

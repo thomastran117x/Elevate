@@ -45,6 +45,7 @@ See [setup](docs/SETUP.md) for prerequisites, local development, infrastructure 
 - [Configuration](docs/CONFIGURATION.md)
 - [Developer conventions](docs/DEVELOPERS.md)
 - [API guide](docs/API.md)
+- [Authorization and permission matrix](docs/AUTHORIZATION.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Testing and coverage policy](docs/TESTING.md)
 - [Authentication security events](docs/SECURITY_EVENTS.md)

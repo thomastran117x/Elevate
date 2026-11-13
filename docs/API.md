@@ -207,10 +207,11 @@ Every endpoint requires an authenticated bearer user unless it explicitly opts o
   - the OpenAPI document routes;
   - the club realtime hub, whose methods each re-run the REST read gate.
 - **Role-restricted endpoints** use the named policies in `AuthorizationPolicies` (`AdminOnly`, `OrganizerOnly`) instead of string literals.
-- **Resource rules** are enforced in the services and are not expressed as policies: club ownership, manager and volunteer staff roles, event registration, and invitations.
+- **Resource rules** are catalog permissions such as `club.manage`, `club.own` and `event.view`. An endpoint declares them with `[RequirePermission]`, a filter checks them before the action, and the service re-checks them. They cover club ownership, manager and volunteer staff roles, membership, event visibility, registrations, payments and media. Admin holds the club owner's powers explicitly. The [authorization guide](AUTHORIZATION.md) is the approved permission matrix: who each permission allows, how every endpoint is checked, and the known deviations.
 - **Responses:**
   - A missing, invalid, or expired token answers `401` with error code `UNAUTHORIZED`.
-  - A failed policy answers `403` with error code `FORBIDDEN` and the message "You do not have permission to access this resource". A service-level ownership denial uses the same code with its own message.
+  - A failed policy answers `403` with error code `FORBIDDEN` and the message "You do not have permission to access this resource". A resource-permission refusal uses the same code with the endpoint's own message.
+  - Existence-sensitive resources (`event.view`, `media.view`) answer a refusal with the same `404` as a missing resource. Anonymous readers of a private club get `401` with the endpoint's message. See [refusals](AUTHORIZATION.md#refusals).
   - A route that matched nothing, including one removed by a disabled feature flag, still answers the JSON `404` to anonymous callers.
 - **OpenAPI:**
   - Protected operations carry the `bearerAuth` security requirement and `401`/`403` responses.
@@ -219,9 +220,10 @@ Every endpoint requires an authenticated bearer user unless it explicitly opts o
   - an action, hub method, or minimal endpoint is unclassified;
   - an `[Authorize]` action sits under a class-level `[AllowAnonymous]`;
   - the anonymous surface differs from the reviewed list in `backend.tests.Unit/Application/Security/ReviewedPublicSurface.cs`;
-  - the regenerated OpenAPI document differs from the committed `backend/openapi.json` or `backend/openapi.yaml`.
+  - the regenerated OpenAPI document differs from the committed `backend/openapi.json` or `backend/openapi.yaml`;
+  - an endpoint is missing from the approved permission matrix, or its `[RequirePermission]` declarations differ from it.
 
-  Add a new public endpoint to that list, and regenerate the OpenAPI documents, in the same change.
+  Add a new public endpoint to that list, classify every new endpoint in the matrix, and regenerate the OpenAPI documents, in the same change.
 
 Captcha and external provider credentials are needed for their corresponding auth flows. Login omits CAPTCHA until the generic 401 envelope reports `meta.captchaRequired: true`; the next submission must include a fresh token. Login failures and sensitive delivery/verification operations use independent Redis-backed source-IP and hashed-target limits, with per-replica IP limiting retained during Redis outages.
 
