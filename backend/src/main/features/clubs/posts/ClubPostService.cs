@@ -1,5 +1,5 @@
+using backend.main.application.security.authorization;
 using backend.main.features.cache;
-using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.profile;
@@ -24,8 +24,7 @@ namespace backend.main.features.clubs.posts
         private readonly AppDatabaseContext _db;
         private readonly IClubPostRepository _postRepository;
         private readonly IPostCommentRepository _commentRepository;
-        private readonly IClubService _clubService;
-        private readonly IFollowRepository _followRepository;
+        private readonly IResourceAuthorizer _authorizer;
         private readonly IClubPostSearchService _searchService;
         private readonly IClubPostSearchOutboxWriter _outboxWriter;
         private readonly IUserRepository _userRepository;
@@ -35,8 +34,7 @@ namespace backend.main.features.clubs.posts
             AppDatabaseContext db,
             IClubPostRepository postRepository,
             IPostCommentRepository commentRepository,
-            IClubService clubService,
-            IFollowRepository followRepository,
+            IResourceAuthorizer authorizer,
             IClubPostSearchService searchService,
             IClubPostSearchOutboxWriter outboxWriter,
             IUserRepository userRepository,
@@ -45,20 +43,22 @@ namespace backend.main.features.clubs.posts
             _db = db;
             _postRepository = postRepository;
             _commentRepository = commentRepository;
-            _clubService = clubService;
-            _followRepository = followRepository;
+            _authorizer = authorizer;
             _searchService = searchService;
             _outboxWriter = outboxWriter;
             _userRepository = userRepository;
             _cache = cache;
         }
 
+        public const string ReadAnonymousMessage = "Authentication is required to view posts for a private club.";
+        public const string ReadForbiddenMessage = "You must be a member of this club to view its posts.";
+        public const string CreateForbiddenMessage = "You are not allowed to create posts for this club.";
+        public const string UpdateForbiddenMessage = "You are not allowed to update this post.";
+        public const string DeleteForbiddenMessage = "You are not allowed to delete this post.";
+
         public async Task<ClubPost> CreateAsync(int clubId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
         {
-            var club = await _clubService.GetClub(clubId);
-
-            if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
-                throw new ForbiddenException("You are not allowed to create posts for this club.");
+            await EnsureStaffAsync(clubId, userId, userRole, CreateForbiddenMessage);
 
             // The entity is built inside the retryable unit on purpose. An execution-strategy
             // retry re-runs this delegate, and reusing an instance from a previous attempt
@@ -85,21 +85,7 @@ namespace backend.main.features.clubs.posts
         public async Task<(ClubPost Post, UserListRecord? Author)> GetByIdAsync(
             int clubId, int postId, int? requestingUserId, string? requestingUserRole)
         {
-            var club = await _clubService.GetClub(clubId);
-
-            if (club.isPrivate)
-            {
-                if (requestingUserId == null)
-                    throw new UnauthorizedException("Authentication is required to view posts for a private club.");
-
-                var hasStaffAccess = await _clubService.HasClubStaffAccessAsync(clubId, requestingUserId.Value, requestingUserRole);
-                if (!hasStaffAccess)
-                {
-                    var membership = await _followRepository.IsFollowingClubAsync(clubId, requestingUserId.Value);
-                    if (membership == null)
-                        throw new ForbiddenException("You must be a member of this club to view its posts.");
-                }
-            }
+            await EnsureCanReadAsync(clubId, requestingUserId, requestingUserRole);
 
             var post = await _cache.GetOrSetAsync(
                 PostCacheKey(postId),
@@ -118,21 +104,7 @@ namespace backend.main.features.clubs.posts
         public async Task<(List<ClubPost> Items, int TotalCount, string Source, Dictionary<int, UserListRecord> Authors)> GetByClubIdAsync(
             int clubId, int? requestingUserId, string? requestingUserRole, string? search, PostSortBy sortBy, int page, int pageSize)
         {
-            var club = await _clubService.GetClub(clubId);
-
-            if (club.isPrivate)
-            {
-                if (requestingUserId == null)
-                    throw new UnauthorizedException("Authentication is required to view posts for a private club.");
-
-                var hasStaffAccess = await _clubService.HasClubStaffAccessAsync(clubId, requestingUserId.Value, requestingUserRole);
-                if (!hasStaffAccess)
-                {
-                    var membership = await _followRepository.IsFollowingClubAsync(clubId, requestingUserId.Value);
-                    if (membership == null)
-                        throw new ForbiddenException("You must be a member of this club to view its posts.");
-                }
-            }
+            await EnsureCanReadAsync(clubId, requestingUserId, requestingUserRole);
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -179,8 +151,7 @@ namespace backend.main.features.clubs.posts
             if (post.ClubId != clubId)
                 throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
-            if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
-                throw new ForbiddenException("You are not allowed to update this post.");
+            await EnsureStaffAsync(clubId, userId, userRole, UpdateForbiddenMessage);
 
             var updated = await ExecuteInTransactionAsync(async () =>
             {
@@ -212,8 +183,7 @@ namespace backend.main.features.clubs.posts
             if (post.ClubId != clubId)
                 throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
-            if (!await _clubService.CanManageClubPostsAsync(clubId, userId, userRole))
-                throw new ForbiddenException("You are not allowed to delete this post.");
+            await EnsureStaffAsync(clubId, userId, userRole, DeleteForbiddenMessage);
 
             await ExecuteInTransactionAsync(async () =>
             {
@@ -225,6 +195,22 @@ namespace backend.main.features.clubs.posts
 
             await _cache.RemoveAsync(PostCacheKey(postId));
         }
+
+        private Task EnsureCanReadAsync(int clubId, int? userId, string? userRole) =>
+            _authorizer.EnsureAsync(
+                new ResourceActor(userId, userRole),
+                Permissions.ClubRead,
+                new ClubResource(clubId),
+                new PermissionMessages(ReadForbiddenMessage, ReadAnonymousMessage));
+
+        // Known deviation recorded in the matrix: any staff member, volunteers included, may
+        // create, edit, pin and delete any post.
+        private Task EnsureStaffAsync(int clubId, int userId, string userRole, string message) =>
+            _authorizer.EnsureAsync(
+                ResourceActor.User(userId, userRole),
+                Permissions.ClubStaffAccess,
+                new ClubResource(clubId),
+                new PermissionMessages(message));
 
         public async Task<(List<ClubPost> Items, int TotalCount, string Source)> GetAllAdminAsync(
             string? search, PostSortBy sortBy, int page, int pageSize)

@@ -32,7 +32,7 @@ The event's `route=` is the method and route template, never the path. `user=` i
      | sort | uniq -c | sort -rn | head -20
    ```
 
-   - **Many users denied on a route they normally use:** a regression. Compare with the reviewed public surface and the role/ownership matrix; see [API authorization](../../API.md).
+   - **Many users denied on a route they normally use:** a regression. Compare with the reviewed public surface and the [permission matrix](../../AUTHORIZATION.md#matrix); see [API authorization](../../API.md#authorization).
    - **Mostly `mfa_required` across users:** check Redis, because step-up proofs live there. When Redis cannot return a proof, `[RequireMfa]` treats it as missing.
    - **One or a few `user=` ids across many admin routes:** probing.
 

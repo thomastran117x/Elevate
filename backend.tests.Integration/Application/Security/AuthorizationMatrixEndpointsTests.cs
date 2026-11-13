@@ -8,6 +8,8 @@ using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.features.clubs.staff;
 using backend.main.features.events;
+using backend.main.features.payment;
+using backend.main.shared.exceptions.http;
 
 using backend.tests.Integration.Infrastructure;
 
@@ -15,6 +17,9 @@ using FluentAssertions;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace backend.tests.Integration.Application.Security;
 
@@ -217,9 +222,9 @@ public class AuthorizationMatrixEndpointsTests
             ["admin"] = admin.AccessToken,
         };
 
-        // Owner only, with no admin bypass.
+        // Owner powers: the owner and, explicitly, admins (#331). Managers are refused.
         await AssertAccessAsync(app, callers, HttpMethod.Get, $"/api/clubs/{clubId}/staff",
-            allowed: ["owner"]);
+            allowed: ["owner", "admin"]);
 
         // Club management: owner, managers, and admins.
         await AssertAccessAsync(app, callers, HttpMethod.Get, $"/api/events/clubs/{clubId}/manage",
@@ -230,6 +235,182 @@ public class AuthorizationMatrixEndpointsTests
         // Event media: any club staff, including volunteers.
         await AssertAccessAsync(app, callers, HttpMethod.Get, $"/api/events/{eventId}/images",
             allowed: ["owner", "manager", "volunteer", "admin"]);
+    }
+
+    [Fact]
+    public async Task ClubOwnerPowers_ShouldBeHeldByTheOwnerAndAdminsButNotManagers()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateSessionAsync(app, "authz-own-owner@example.com", "Organizer");
+        var manager = await CreateSessionAsync(app, "authz-own-manager@example.com", "Participant");
+        await CreateSessionAsync(app, "authz-own-helper@example.com", "Participant");
+        var admin = await CreateSessionAsync(app, "authz-own-admin@example.com", "Admin");
+
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Authz Owner Powers Club");
+        var ownerUser = (await app.FindUserByEmailAsync("authz-own-owner@example.com"))!;
+        var managerUser = (await app.FindUserByEmailAsync("authz-own-manager@example.com"))!;
+        var helperUser = (await app.FindUserByEmailAsync("authz-own-helper@example.com"))!;
+        await app.AddClubStaffAsync(clubId, managerUser.Id, ownerUser.Id, ClubStaffRole.Manager);
+
+        // A manager runs the club but holds none of the owner's powers; the edge refuses before
+        // the service runs, with the same messages the services use.
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Get, $"/api/clubs/{clubId}/staff", "Not allowed");
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/staff/volunteers",
+            "Not allowed", new { userId = helperUser.Id });
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/transfer-ownership",
+            "Not allowed", new { newOwnerUserId = managerUser.Id });
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/staff/invitations",
+            "Only the club owner can manage staff invitations.", new { identifier = helperUser.Email, role = "Volunteer" });
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Delete, $"/api/clubs/{clubId}", "Not allowed");
+
+        // Admins hold the owner's powers explicitly (#331).
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Get, $"/api/clubs/{clubId}/staff", HttpStatusCode.OK);
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/staff/volunteers",
+            HttpStatusCode.Created, new { userId = helperUser.Id });
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Delete, $"/api/clubs/{clubId}/staff/{helperUser.Id}",
+            HttpStatusCode.OK);
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/transfer-ownership",
+            HttpStatusCode.OK, new { newOwnerUserId = managerUser.Id });
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Delete, $"/api/clubs/{clubId}", HttpStatusCode.OK);
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Get, $"/api/clubs/{clubId}/staff", HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task ClubStaffRoles_ShouldStayInTheirClubAndTakeEffectOnTheNextRequest()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var ownerA = await CreateSessionAsync(app, "authz-iso-owner-a@example.com", "Organizer");
+        var ownerB = await CreateSessionAsync(app, "authz-iso-owner-b@example.com", "Organizer");
+        var managerB = await CreateSessionAsync(app, "authz-iso-manager-b@example.com", "Participant");
+
+        var clubA = await CreateClubAsync(app, ownerA.AccessToken, "Authz Isolation Club A");
+        var clubB = await CreateClubAsync(app, ownerB.AccessToken, "Authz Isolation Club B");
+        var ownerBUser = (await app.FindUserByEmailAsync("authz-iso-owner-b@example.com"))!;
+        var managerBUser = (await app.FindUserByEmailAsync("authz-iso-manager-b@example.com"))!;
+        await app.AddClubStaffAsync(clubB, managerBUser.Id, ownerBUser.Id, ClubStaffRole.Manager);
+
+        await AssertStatusAsync(app, managerB.AccessToken, HttpMethod.Get, $"/api/events/clubs/{clubB}/manage", HttpStatusCode.OK);
+        await AssertRefusedAsync(app, managerB.AccessToken, HttpMethod.Get, $"/api/events/clubs/{clubA}/manage", "Not allowed");
+        await AssertRefusedAsync(app, managerB.AccessToken, HttpMethod.Get, $"/api/clubs/{clubA}/members/invitations",
+            "Only club organisers can manage member invitations.");
+
+        await AssertStatusAsync(app, ownerB.AccessToken, HttpMethod.Delete, $"/api/clubs/{clubB}/staff/{managerBUser.Id}",
+            HttpStatusCode.OK);
+
+        // Same access token: staff roles are read from the database on every check.
+        await AssertRefusedAsync(app, managerB.AccessToken, HttpMethod.Get, $"/api/events/clubs/{clubB}/manage", "Not allowed");
+    }
+
+    [Fact]
+    public async Task PrivateClubContent_ShouldBeRefusedBeforeChildResourcesAreLookedUp()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateSessionAsync(app, "authz-content-owner@example.com", "Organizer");
+        var outsider = await CreateSessionAsync(app, "authz-content-outsider@example.com", "Participant");
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Authz Private Content Club", isPrivate: true);
+        const int missingPostId = 987_654;
+
+        // A post that does not exist answers a non-member exactly like one that does, so a private
+        // club's post ids cannot be probed. Anonymous readers are challenged with the 401 message.
+        var anonymous = await app.Client.GetAsync($"/api/clubs/{clubId}/posts/{missingPostId}/comments");
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized, await app.DescribeFailureAsync(anonymous));
+        await AssertEnvelopeAsync(anonymous, "UNAUTHORIZED", "Authentication is required to view comments for a private club.");
+
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Get,
+            $"/api/clubs/{clubId}/posts/{missingPostId}/comments",
+            "You must be a member of this club to view its comments.");
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Get,
+            $"/api/clubs/{clubId}/posts/{missingPostId}",
+            "You must be a member of this club to view its posts.");
+
+        // Staff-only post writes refuse non-staff before the post is loaded.
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/posts",
+            "You are not allowed to create posts for this club.", new { title = "Hi", content = "Body" });
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Put, $"/api/clubs/{clubId}/posts/{missingPostId}",
+            "You are not allowed to update this post.", new { title = "Hi", content = "Body" });
+
+        // The owner passes the gate and gets the post's own not-found answer.
+        await AssertStatusAsync(app, owner.AccessToken, HttpMethod.Get,
+            $"/api/clubs/{clubId}/posts/{missingPostId}/comments", HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task EventManagement_ShouldRefuseOutsidersBeforeRevealingEventState()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateSessionAsync(app, "authz-event-owner@example.com", "Organizer");
+        var outsider = await CreateSessionAsync(app, "authz-event-outsider@example.com", "Organizer");
+        var outsiderUser = (await app.FindUserByEmailAsync("authz-event-outsider@example.com"))!;
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Authz Event State Club");
+        var eventId = await CreatePublishedEventAsync(app, owner.AccessToken, clubId, "Authz Event State Event");
+
+        // Inviting to a public event is a 400 for its managers; an outsider is refused first, so
+        // the answer no longer reveals whether the event is private or published.
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Post, $"/api/events/{eventId}/invitations",
+            "Not allowed", new { userIds = new[] { outsiderUser.Id } });
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Get, $"/api/events/{eventId}/invitations", "Not allowed");
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Post, $"/api/events/{eventId}/publish", "Not allowed");
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Get, $"/api/events/clubs/{clubId}/series", "Not allowed");
+
+        // Missing resources keep their usual not-found answer.
+        await AssertStatusAsync(app, outsider.AccessToken, HttpMethod.Get, "/api/events/series/987654", HttpStatusCode.NotFound);
+        await AssertStatusAsync(app, outsider.AccessToken, HttpMethod.Get, "/api/events/987654/manage", HttpStatusCode.NotFound);
+        await AssertStatusAsync(app, owner.AccessToken, HttpMethod.Get, $"/api/events/{eventId}/manage", HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task ParticipantRecords_ShouldBeReadableByTheirOwnerOnly()
+    {
+        // Stripe is not configured in tests, so only the payment provider is replaced; the
+        // payment.owner decision still reads the seeded row from the database.
+        await using var app = await AuthApiTestApp.CreateAsync(services =>
+        {
+            services.RemoveAll<IPaymentService>();
+            services.AddScoped<IPaymentService, RepositoryBackedPaymentService>();
+        });
+        var owner = await CreateSessionAsync(app, "authz-self-owner@example.com", "Organizer");
+        var payer = await CreateSessionAsync(app, "authz-self-payer@example.com", "Participant");
+        var other = await CreateSessionAsync(app, "authz-self-other@example.com", "Participant");
+        var payerUser = (await app.FindUserByEmailAsync("authz-self-payer@example.com"))!;
+
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Authz Self Club");
+        var eventId = await CreatePublishedEventAsync(app, owner.AccessToken, clubId, "Authz Self Event");
+        await app.AddPaymentAsync(eventId, payerUser.Id, PaymentStatus.Succeeded);
+        var paymentId = await app.QueryDbAsync(db => db.Payments
+            .Where(payment => payment.UserId == payerUser.Id)
+            .Select(payment => payment.Id)
+            .SingleAsync());
+
+        await AssertStatusAsync(app, payer.AccessToken, HttpMethod.Get, $"/api/payments/{paymentId}", HttpStatusCode.OK);
+        await AssertRefusedAsync(app, other.AccessToken, HttpMethod.Get, $"/api/payments/{paymentId}", "Not allowed.");
+        await AssertRefusedAsync(app, other.AccessToken, HttpMethod.Post, $"/api/payments/{paymentId}/refund", "Not allowed.");
+        await AssertStatusAsync(app, other.AccessToken, HttpMethod.Get, "/api/payments/987654", HttpStatusCode.NotFound);
+
+        await AssertStatusAsync(app, payer.AccessToken, HttpMethod.Get,
+            $"/api/users/{payerUser.Id}/events/registered", HttpStatusCode.OK);
+        await AssertRefusedAsync(app, other.AccessToken, HttpMethod.Get,
+            $"/api/users/{payerUser.Id}/events/registered", "You can only view your own registrations.");
+
+        // Participation in a visible event is open to any signed-in user; managers alone see the waitlist.
+        await AssertStatusAsync(app, other.AccessToken, HttpMethod.Get, $"/api/events/{eventId}/registrations/me", HttpStatusCode.OK);
+        await AssertRefusedAsync(app, other.AccessToken, HttpMethod.Get, $"/api/events/{eventId}/waitlist", "Not allowed");
+    }
+
+    private static async Task AssertRefusedAsync(
+        AuthApiTestApp app, string accessToken, HttpMethod method, string path, string message, object? body = null)
+    {
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            method, path, accessToken, body is null ? null : JsonContent.Create(body)));
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, await app.DescribeFailureAsync(response));
+        await AssertEnvelopeAsync(response, "FORBIDDEN", message);
+    }
+
+    private static async Task AssertStatusAsync(
+        AuthApiTestApp app, string accessToken, HttpMethod method, string path, HttpStatusCode expected, object? body = null)
+    {
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            method, path, accessToken, body is null ? null : JsonContent.Create(body)));
+        response.StatusCode.Should().Be(expected, $"{method} {path}: {await app.DescribeFailureAsync(response)}");
     }
 
     private static async Task AssertAccessAsync(
@@ -288,7 +469,7 @@ public class AuthorizationMatrixEndpointsTests
         return await app.LoginApiAsync(user.Username!, trustedDeviceToken: device);
     }
 
-    private static async Task<int> CreateClubAsync(AuthApiTestApp app, string accessToken, string name)
+    private static async Task<int> CreateClubAsync(AuthApiTestApp app, string accessToken, string name, bool isPrivate = false)
     {
         var response = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Post,
@@ -300,7 +481,8 @@ public class AuthorizationMatrixEndpointsTests
                 Description = "Authorization matrix club",
                 Clubtype = "social",
                 ClubImageUrl = await app.CreateClubImageUrlAsync(accessToken),
-                Email = $"{name.Replace(" ", "-", StringComparison.Ordinal).ToLowerInvariant()}@example.com"
+                Email = $"{name.Replace(" ", "-", StringComparison.Ordinal).ToLowerInvariant()}@example.com",
+                IsPrivate = isPrivate
             })));
         response.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(response));
         await app.ReindexClubsAsync();
@@ -401,5 +583,22 @@ public class AuthorizationMatrixEndpointsTests
     private sealed class PresignedUrlModel
     {
         public string PublicUrl { get; set; } = string.Empty;
+    }
+
+    private sealed class RepositoryBackedPaymentService(IPaymentRepository payments) : IPaymentService
+    {
+        public async Task<Payment> GetPayment(int paymentId) =>
+            await payments.GetByIdAsync(paymentId)
+            ?? throw new ResourceNotFoundException($"Payment {paymentId} not found.");
+
+        public Task<Payment> CreatePaymentSession(int userId, string userRole, int eventId, string? idempotencyKey = null) =>
+            throw new NotSupportedException();
+
+        public Task<List<Payment>> GetPaymentsByUser(int userId, int page = 1, int pageSize = 20) =>
+            payments.GetByUserIdAsync(userId, page, pageSize);
+
+        public Task HandleWebhook(string payload, string signature) => throw new NotSupportedException();
+
+        public Task<Payment> RefundPayment(int paymentId, int requestingUserId) => throw new NotSupportedException();
     }
 }

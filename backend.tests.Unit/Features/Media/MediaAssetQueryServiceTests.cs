@@ -1,10 +1,9 @@
-using backend.main.features.clubs;
+using backend.main.features.clubs.staff;
 using backend.main.features.media;
 using backend.main.shared.exceptions.http;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
-
-using Moq;
 
 namespace backend.tests.Unit.Features.Media;
 
@@ -64,12 +63,40 @@ public class MediaAssetQueryServiceTests
         var manager = await database.SeedUserAsync("manager");
         var club = await database.SeedClubAsync(owner.Id);
         var asset = await database.SeedAssetAsync(ownerUserId: owner.Id, clubId: club.Id);
-        var clubs = new Mock<IClubService>();
-        clubs.Setup(c => c.CanManageClubAsync(club.Id, manager.Id, "Organizer")).ReturnsAsync(true);
+        database.Db.ClubStaff.Add(new ClubStaff
+        {
+            ClubId = club.Id,
+            UserId = manager.Id,
+            Role = ClubStaffRole.Manager,
+            GrantedByUserId = owner.Id
+        });
+        await database.Db.SaveChangesAsync();
 
-        var response = await CreateService(database, clubs.Object).GetForViewerAsync(asset.PublicId, manager.Id, "Organizer");
+        var response = await CreateService(database).GetForViewerAsync(asset.PublicId, manager.Id, "Organizer");
 
         response.Id.Should().Be(asset.PublicId);
+    }
+
+    [Fact]
+    public async Task GetForViewerAsync_ShouldHideAClubAssetFromAVolunteerWhoDidNotUploadIt()
+    {
+        await using var database = await MediaTestDatabase.CreateAsync();
+        var owner = await database.SeedUserAsync();
+        var volunteer = await database.SeedUserAsync("volunteer");
+        var club = await database.SeedClubAsync(owner.Id);
+        var asset = await database.SeedAssetAsync(ownerUserId: owner.Id, clubId: club.Id);
+        database.Db.ClubStaff.Add(new ClubStaff
+        {
+            ClubId = club.Id,
+            UserId = volunteer.Id,
+            Role = ClubStaffRole.Volunteer,
+            GrantedByUserId = owner.Id
+        });
+        await database.Db.SaveChangesAsync();
+
+        var act = () => CreateService(database).GetForViewerAsync(asset.PublicId, volunteer.Id, "Volunteer");
+
+        await act.Should().ThrowAsync<ResourceNotFoundException>().WithMessage("Media asset not found.");
     }
 
     [Fact]
@@ -89,20 +116,22 @@ public class MediaAssetQueryServiceTests
             .Should().Be((await nobodys.Should().ThrowAsync<ResourceNotFoundException>()).Which.Message);
     }
 
-    [Fact]
-    public async Task GetForViewerAsync_ShouldNotConsultClubs_ForAnAssetWithNoClub()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Admin")]
+    public async Task GetForViewerAsync_ShouldShowAnAssetWithNoClubToItsUploaderAlone(string? role)
     {
+        // Without a club there is no manager to defer to, so not even an admin may look.
         await using var database = await MediaTestDatabase.CreateAsync();
         var owner = await database.SeedUserAsync();
         var stranger = await database.SeedUserAsync("stranger");
         var asset = await database.SeedAssetAsync(ownerUserId: owner.Id);
-        var clubs = new Mock<IClubService>(MockBehavior.Strict);
 
-        var act = () => CreateService(database, clubs.Object).GetForViewerAsync(asset.PublicId, stranger.Id, null);
+        var act = () => CreateService(database).GetForViewerAsync(asset.PublicId, stranger.Id, role);
 
         await act.Should().ThrowAsync<ResourceNotFoundException>();
     }
 
-    private static MediaAssetQueryService CreateService(MediaTestDatabase database, IClubService? clubs = null) =>
-        new(database.CreateRepository(), clubs ?? Mock.Of<IClubService>());
+    private static MediaAssetQueryService CreateService(MediaTestDatabase database) =>
+        new(database.CreateRepository(), TestResourceAuthorizers.Over(database.Db));
 }

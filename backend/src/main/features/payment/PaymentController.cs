@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.payment.contracts.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
@@ -56,6 +57,7 @@ namespace backend.main.features.payment
 
         [Authorize]
         [HttpGet("{paymentId:int}")]
+        [RequirePermission(PermissionNames.PaymentOwner, "paymentId", DenialMessage = "Not allowed.")]
         [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPayment(int paymentId)
         {
@@ -135,6 +137,7 @@ namespace backend.main.features.payment
 
         [Authorize]
         [HttpPost("{paymentId:int}/refund")]
+        [RequirePermission(PermissionNames.PaymentOwner, "paymentId", DenialMessage = "Not allowed.")]
         [ProducesResponseType(typeof(ApiResponse<PaymentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RefundPayment(int paymentId)
         {

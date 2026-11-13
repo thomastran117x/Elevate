@@ -1,9 +1,8 @@
-using backend.main.features.clubs;
 using backend.main.features.clubs.discussions;
-using backend.main.features.clubs.follow;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -17,15 +16,12 @@ public class ClubDiscussionServiceTests
     public async Task CreateAsync_ShouldThrow_WhenClubDoesNotExist()
     {
         var harness = new ClubDiscussionServiceHarness();
-        harness.ClubServiceMock
-            .Setup(service => service.GetClub(harness.ClubId))
-            .ThrowsAsync(new ResourceNotFoundException($"Club with ID {harness.ClubId} was not found."));
 
         var action = () => harness.Service.CreateAsync(harness.ClubId, harness.UserId, "Participant", "Topic", "Body");
 
         await action.Should()
             .ThrowAsync<ResourceNotFoundException>()
-            .WithMessage($"Club with ID {harness.ClubId} was not found.");
+            .WithMessage($"Club {harness.ClubId} not found");
     }
 
     [Fact]
@@ -80,8 +76,6 @@ public class ClubDiscussionServiceTests
             harness.ClubId, harness.UserId, "Organizer", "Staff topic", "Body");
 
         created.Title.Should().Be("Staff topic");
-        harness.FollowRepositoryMock.Verify(
-            repo => repo.IsFollowingClubAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -340,8 +334,7 @@ public class ClubDiscussionServiceTests
     {
         public ClubDiscussionService Service { get; }
         public Mock<IClubDiscussionRepository> DiscussionRepositoryMock { get; } = new();
-        public Mock<IClubService> ClubServiceMock { get; } = new();
-        public Mock<IFollowRepository> FollowRepositoryMock { get; } = new();
+        public FakeClubAuthorizer Access { get; } = new();
         public Mock<IUserRepository> UserRepositoryMock { get; } = new();
 
         public int ClubId => 7;
@@ -352,35 +345,18 @@ public class ClubDiscussionServiceTests
         {
             Service = new ClubDiscussionService(
                 DiscussionRepositoryMock.Object,
-                ClubServiceMock.Object,
-                FollowRepositoryMock.Object,
+                Access,
                 UserRepositoryMock.Object);
         }
 
-        public void SetupClub(bool isPrivate)
-        {
-            ClubServiceMock
-                .Setup(service => service.GetClub(ClubId))
-                .ReturnsAsync(new Club
-                {
-                    Id = ClubId,
-                    UserId = OtherUserId,
-                    Name = "Discussion Club",
-                    Description = "A club used for discussion tests.",
-                    Clubtype = ClubType.Gaming,
-                    ClubImage = "https://cdn.test/clubs/discussion.png",
-                    isPrivate = isPrivate
-                });
-        }
+        public void SetupClub(bool isPrivate) => Access.Club(ClubId, isPrivate, ownerId: OtherUserId);
 
         public void SetupMembership(bool isStaff, bool isMember)
         {
-            ClubServiceMock
-                .Setup(service => service.HasClubStaffAccessAsync(ClubId, UserId, It.IsAny<string?>()))
-                .ReturnsAsync(isStaff);
-            FollowRepositoryMock
-                .Setup(repo => repo.IsFollowingClubAsync(ClubId, UserId))
-                .ReturnsAsync(isMember ? new FollowClub { Id = 1, ClubId = ClubId, UserId = UserId } : null);
+            if (isStaff)
+                Access.Volunteer(ClubId, UserId);
+            if (isMember)
+                Access.Member(ClubId, UserId);
         }
     }
 }

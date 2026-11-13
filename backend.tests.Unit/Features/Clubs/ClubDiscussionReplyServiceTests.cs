@@ -1,9 +1,8 @@
-using backend.main.features.clubs;
 using backend.main.features.clubs.discussions;
 using backend.main.features.clubs.discussions.replies;
-using backend.main.features.clubs.follow;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -25,18 +24,12 @@ public class ClubDiscussionReplyServiceTests
             harness.ClubId, harness.DiscussionId, null, harness.UserId, "Participant", "  Hello  ");
 
         created.Reply.Content.Should().Be("Hello");
-        harness.Follows.Verify(
-            r => r.IsFollowingClubAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
     public async Task CreateAsync_ShouldRejectAPrivateClubOutsider()
     {
         var harness = new Harness(isPrivate: true);
-        harness.Clubs.Setup(s => s.HasClubStaffAccessAsync(
-            harness.ClubId, harness.UserId, It.IsAny<string?>())).ReturnsAsync(false);
-        harness.Follows.Setup(r => r.IsFollowingClubAsync(harness.ClubId, harness.UserId))
-            .ReturnsAsync((FollowClub?)null);
 
         var act = () => harness.Service.CreateAsync(
             harness.ClubId, harness.DiscussionId, null, harness.UserId, "Participant", "Hello");
@@ -96,8 +89,7 @@ public class ClubDiscussionReplyServiceTests
     {
         public Mock<IClubDiscussionReplyRepository> Replies { get; } = new();
         public Mock<IClubDiscussionRepository> Discussions { get; } = new();
-        public Mock<IClubService> Clubs { get; } = new();
-        public Mock<IFollowRepository> Follows { get; } = new();
+        public FakeClubAuthorizer Access { get; } = new();
         public Mock<IUserRepository> Users { get; } = new();
         public ClubDiscussionReplyService Service { get; }
         public int ClubId => 7;
@@ -106,16 +98,7 @@ public class ClubDiscussionReplyServiceTests
 
         public Harness(bool isPrivate)
         {
-            Clubs.Setup(s => s.GetClub(ClubId)).ReturnsAsync(new Club
-            {
-                Id = ClubId,
-                UserId = 1,
-                Name = "Club",
-                Description = "Description",
-                Clubtype = ClubType.Gaming,
-                ClubImage = "image.png",
-                isPrivate = isPrivate
-            });
+            Access.Club(ClubId, isPrivate, ownerId: 1);
             Discussions.Setup(r => r.GetByIdAsync(DiscussionId)).ReturnsAsync(new ClubDiscussion
             {
                 Id = DiscussionId,
@@ -125,7 +108,7 @@ public class ClubDiscussionReplyServiceTests
                 Description = "Body"
             });
             Service = new ClubDiscussionReplyService(
-                Replies.Object, Discussions.Object, Clubs.Object, Follows.Object, Users.Object);
+                Replies.Object, Discussions.Object, Access, Users.Object);
         }
 
         public void SetupEmptyViewData(int replyId)

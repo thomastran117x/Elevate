@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.events.favourites.contracts.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
@@ -31,6 +32,7 @@ namespace backend.main.features.events.favourites
 
         [Authorize]
         [HttpPost("{eventId}/favourite")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventFavouriteResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> Favourite([Range(1, int.MaxValue)] int eventId)
         {

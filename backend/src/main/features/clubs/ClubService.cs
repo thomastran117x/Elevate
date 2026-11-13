@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using backend.main.application.security.authorization;
 using backend.main.features.cache;
 using backend.main.features.clubs.contracts;
 using backend.main.features.clubs.follow;
@@ -34,6 +35,7 @@ namespace backend.main.features.clubs
         private readonly IClubSearchOutboxWriter _outboxWriter;
         private readonly ClubVersioningOptions _versioningOptions;
         private readonly TimeProvider _timeProvider;
+        private readonly IResourceAuthorizer _authorizer;
 
         private static readonly TimeSpan ClubTTL = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan ClubListTTL = TimeSpan.FromSeconds(60);
@@ -56,7 +58,8 @@ namespace backend.main.features.clubs
             IClubSearchService searchService,
             IClubSearchOutboxWriter outboxWriter,
             IOptions<ClubVersioningOptions> versioningOptions,
-            TimeProvider timeProvider)
+            TimeProvider timeProvider,
+            IResourceAuthorizer authorizer)
         {
             _db = db;
             _clubRepository = clubRepository;
@@ -70,6 +73,7 @@ namespace backend.main.features.clubs
             _outboxWriter = outboxWriter;
             _versioningOptions = versioningOptions.Value;
             _timeProvider = timeProvider;
+            _authorizer = authorizer;
         }
 
         public async Task<Club> CreateClub(int userId, ClubWriteModel model)
@@ -186,7 +190,7 @@ namespace backend.main.features.clubs
             if (userId == null)
                 return result;
 
-            if (IsAdminRole(userRole))
+            if (ResourceActor.User(userId.Value, userRole).IsAdmin)
             {
                 foreach (var id in ids)
                     result[id] = new ClubAccessInfo { CanManage = true };
@@ -235,49 +239,17 @@ namespace backend.main.features.clubs
             return result;
         }
 
-        public async Task<bool> CanManageClubAsync(int clubId, int userId, string? userRole = null)
-        {
-            if (IsAdminRole(userRole))
-                return await _db.Clubs.AsNoTracking().AnyAsync(club => club.Id == clubId);
+        public Task<bool> CanManageClubAsync(int clubId, int userId, string? userRole = null) =>
+            _authorizer.IsAllowedAsync(ResourceActor.User(userId, userRole), Permissions.ClubManage, new ClubResource(clubId));
 
-            return await _db.Clubs
-                .AsNoTracking()
-                .AnyAsync(club =>
-                    club.Id == clubId &&
-                    (club.UserId == userId ||
-                     _db.ClubStaff.Any(staff =>
-                         staff.ClubId == club.Id &&
-                         staff.UserId == userId &&
-                         staff.Role == ClubStaffRole.Manager)));
-        }
-
-        public async Task<bool> HasClubStaffAccessAsync(int clubId, int userId, string? userRole = null)
-        {
-            if (IsAdminRole(userRole))
-                return await _db.Clubs.AsNoTracking().AnyAsync(club => club.Id == clubId);
-
-            return await _db.Clubs
-                .AsNoTracking()
-                .AnyAsync(club =>
-                    club.Id == clubId &&
-                    (club.UserId == userId ||
-                     _db.ClubStaff.Any(staff =>
-                         staff.ClubId == club.Id &&
-                         staff.UserId == userId)));
-        }
+        public Task<bool> HasClubStaffAccessAsync(int clubId, int userId, string? userRole = null) =>
+            _authorizer.IsAllowedAsync(ResourceActor.User(userId, userRole), Permissions.ClubStaffAccess, new ClubResource(clubId));
 
         public Task<bool> CanManageClubPostsAsync(int clubId, int userId, string? userRole = null) =>
             HasClubStaffAccessAsync(clubId, userId, userRole);
 
         public Task<bool> CanManageEventMediaAsync(int clubId, int userId, string? userRole = null) =>
             HasClubStaffAccessAsync(clubId, userId, userRole);
-
-        public async Task<bool> IsClubOwnerAsync(int clubId, int userId, string? userRole = null)
-        {
-            return await _db.Clubs
-                .AsNoTracking()
-                .AnyAsync(club => club.Id == clubId && club.UserId == userId);
-        }
 
         public async Task<(List<Club> Clubs, int TotalCount, string Source)> GetAllClubs(ClubSearchCriteria criteria)
         {
@@ -446,10 +418,10 @@ namespace backend.main.features.clubs
             return existing;
         }
 
-        public async Task DeleteClub(int clubId, int userId)
+        public async Task DeleteClub(int clubId, int userId, string userRole)
         {
             var club = await GetTrackedClubOrThrowAsync(clubId);
-            EnsureOwner(club, userId);
+            await EnsureCanOwnClubAsync(club, userId, userRole);
 
             await _blobService.DeleteBlobAsync(club.ClubImage);
             if (!string.IsNullOrWhiteSpace(club.BannerImage))
@@ -540,7 +512,7 @@ namespace backend.main.features.clubs
         public async Task<IReadOnlyList<ClubStaff>> GetStaffAsync(int clubId, int userId, string userRole, string? search = null)
         {
             var club = await GetClubRecordOrThrowAsync(clubId);
-            EnsureOwner(club, userId);
+            await EnsureCanOwnClubAsync(club, userId, userRole);
 
             var query = _db.ClubStaff
                 .AsNoTracking()
@@ -565,7 +537,7 @@ namespace backend.main.features.clubs
         public async Task<ClubStaff> AddStaffAsync(int clubId, int targetUserId, ClubStaffRole role, int actorUserId, string actorUserRole)
         {
             var club = await GetTrackedClubOrThrowAsync(clubId);
-            EnsureOwner(club, actorUserId);
+            await EnsureCanOwnClubAsync(club, actorUserId, actorUserRole);
 
             if (club.UserId == targetUserId)
                 throw new ConflictException("The club owner already has full access.");
@@ -637,7 +609,7 @@ namespace backend.main.features.clubs
         public async Task RemoveStaffAsync(int clubId, int targetUserId, int actorUserId, string actorUserRole)
         {
             var club = await GetTrackedClubOrThrowAsync(clubId);
-            EnsureOwner(club, actorUserId);
+            await EnsureCanOwnClubAsync(club, actorUserId, actorUserRole);
 
             if (club.UserId == targetUserId)
                 throw new BadRequestException("The club owner cannot be removed from staff.");
@@ -655,7 +627,7 @@ namespace backend.main.features.clubs
         public async Task<Club> TransferOwnershipAsync(int clubId, int newOwnerUserId, int actorUserId, string actorUserRole)
         {
             var club = await GetTrackedClubOrThrowAsync(clubId);
-            EnsureOwner(club, actorUserId);
+            await EnsureCanOwnClubAsync(club, actorUserId, actorUserRole);
 
             if (club.UserId == newOwnerUserId)
                 throw new ConflictException("This user already owns the club.");
@@ -1132,34 +1104,14 @@ namespace backend.main.features.clubs
             return $"clubs:list:v{version}:q:{queryKey}:t:{clubTypeKey}:sort:{criteria.SortBy}:p{criteria.Page}:s{criteria.PageSize}";
         }
 
-        private async Task EnsureCanManageClubAsync(Club club, int userId, string userRole)
-        {
-            if (club.UserId == userId || IsAdminRole(userRole))
-                return;
+        // Re-checked here, not only at the edge, so direct and transactional callers are held to the
+        // same rule. The club row is already loaded; the authorizer reads staff roles fresh.
+        private Task EnsureCanManageClubAsync(Club club, int userId, string userRole) =>
+            _authorizer.EnsureAsync(ResourceActor.User(userId, userRole), Permissions.ClubManage, new ClubResource(club.Id));
 
-            var isManager = await _db.ClubStaff
-                .AsNoTracking()
-                .AnyAsync(staff =>
-                    staff.ClubId == club.Id &&
-                    staff.UserId == userId &&
-                    staff.Role == ClubStaffRole.Manager);
-
-            if (isManager)
-                return;
-
-            throw new ForbiddenException("Not allowed");
-        }
-
-        private static void EnsureOwner(Club club, int userId)
-        {
-            if (club.UserId == userId)
-                return;
-
-            throw new ForbiddenException("Not allowed");
-        }
-
-        private static bool IsAdminRole(string? userRole) =>
-            string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
+        // Owner powers: delete, staff management, ownership transfer. Admin holds them too (#331).
+        private Task EnsureCanOwnClubAsync(Club club, int userId, string userRole) =>
+            _authorizer.EnsureAsync(ResourceActor.User(userId, userRole), Permissions.ClubOwn, new ClubResource(club.Id));
 
         private static string NormalizeActorRole(string actorRole) =>
             string.IsNullOrWhiteSpace(actorRole) ? "Unknown" : actorRole.Trim();

@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.clubs;
 using backend.main.features.events;
 using backend.main.features.events.contracts.requests;
@@ -43,6 +44,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{clubId}")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId")]
         [ProducesResponseType(typeof(ApiResponse<EventResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateEvent([FromBody] EventCreateRequest request, int clubId)
         {
@@ -91,6 +93,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPut("{eventId}")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateEvent([FromBody] EventUpdateRequest request, int eventId)
         {
@@ -136,6 +139,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpDelete("{eventId}")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeleteEvent(int eventId)
         {
@@ -162,6 +166,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsVersioning)]
         [HttpGet("{eventId}/versions")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventVersionListItemResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventVersions(
             int eventId,
@@ -199,6 +204,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsVersioning)]
         [HttpGet("{eventId}/versions/{versionNumber}")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventVersionDetailResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventVersion(int eventId, int versionNumber)
         {
@@ -218,6 +224,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsVersioning)]
         [HttpPost("{eventId}/versions/{versionNumber}/rollback")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventRollbackResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RollbackEventVersion(int eventId, int versionNumber)
         {
@@ -279,6 +286,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpGet("clubs/{clubId}/manage")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId")]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ManagedEventResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetManageableEventsByClub(
             int clubId,
@@ -329,6 +337,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpGet("{eventId}/manage")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetManageableEvent(int eventId)
         {
@@ -354,6 +363,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("clubs/{clubId}/drafts")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateDraftEvent([FromBody] EventDraftUpsertRequest request, int clubId)
         {
@@ -379,6 +389,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPatch("{eventId}/draft")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateDraftEvent([FromBody] EventDraftUpsertRequest request, int eventId)
         {
@@ -404,6 +415,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/publish")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> PublishEvent(int eventId)
         {
@@ -429,6 +441,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/cancel")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> CancelEvent(int eventId)
         {
@@ -454,6 +467,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/archive")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ArchiveEvent(int eventId)
         {
@@ -479,6 +493,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/pause")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> PauseEvent(int eventId)
         {
@@ -504,6 +519,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/resume")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ResumeEvent(int eventId)
         {
@@ -529,6 +545,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/reinstate")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReinstateEvent(int eventId)
         {
@@ -554,6 +571,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/unarchive")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UnarchiveEvent(int eventId)
         {
@@ -579,6 +597,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("{eventId}/lifecycle/revert")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RevertEventLifecycle(int eventId)
         {
@@ -603,6 +622,7 @@ namespace backend.main.features.events
         }
 
         [HttpGet("{eventId}")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<EventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEvent(int eventId)
@@ -775,6 +795,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpPost("batch/{clubId}")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId")]
         [ProducesResponseType(typeof(ApiResponse<BatchCreateResultResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> BatchCreateEvents([FromBody] BatchCreateEventRequest request, int clubId)
         {
@@ -860,6 +881,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsAnalytics)]
         [HttpGet("{eventId}/analytics")]
+        [RequirePermission(PermissionNames.EventManage, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventAnalyticsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventAnalytics(int eventId)
         {
@@ -921,6 +943,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpGet("{eventId}/images")]
+        [RequirePermission(PermissionNames.EventMedia, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<List<EventImageResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetEventImages(int eventId)
         {
@@ -948,6 +971,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpPost("{eventId}/images")]
+        [RequirePermission(PermissionNames.EventMedia, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventImageResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> AddEventImage([FromBody] AddEventImageRequest request, int eventId)
         {
@@ -982,6 +1006,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpPatch("{eventId}/images/{imageId}")]
+        [RequirePermission(PermissionNames.EventMedia, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventImageResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateEventImage(
             [FromBody] UpdateEventImageRequest request,
@@ -1018,6 +1043,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpPut("{eventId}/images/{imageId}")]
+        [RequirePermission(PermissionNames.EventMedia, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<EventImageResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReplaceEventImage(
             [FromBody] ReplaceEventImageRequest request,
@@ -1049,6 +1075,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpPut("{eventId}/images/order")]
+        [RequirePermission(PermissionNames.EventMedia, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<List<EventImageResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReorderEventImages(
             [FromBody] ReorderEventImagesRequest request,
@@ -1079,6 +1106,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpPut("{eventId}/images/{imageId}/cover")]
+        [RequirePermission(PermissionNames.EventMedia, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<List<EventImageResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> SetEventCoverImage(int eventId, int imageId)
         {
@@ -1107,6 +1135,7 @@ namespace backend.main.features.events
         [Authorize]
         [FeatureGate(FeatureFlagKeys.EventsImages)]
         [HttpDelete("{eventId}/images/{imageId}")]
+        [RequirePermission(PermissionNames.EventMedia, "eventId")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RemoveEventImage(int eventId, int imageId)
         {
@@ -1132,6 +1161,7 @@ namespace backend.main.features.events
 
         [Authorize]
         [HttpGet("clubs/{clubId}/analytics")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId")]
         [ProducesResponseType(typeof(ApiResponse<ClubAnalyticsResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubAnalytics(int clubId)
         {

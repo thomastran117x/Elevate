@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.clubs.posts.comments.contracts.requests;
 using backend.main.features.clubs.posts.comments.contracts.responses;
 using backend.main.features.clubs.realtime;
@@ -33,6 +34,7 @@ public sealed class PostCommentController : ControllerBase
 
     [AllowAnonymous]
     [HttpGet("{clubId}/posts/{postId}/comments")]
+    [RequirePermission(PermissionNames.ClubRead, "clubId", DenialMessage = PostCommentService.ReadForbiddenMessage, AnonymousDenialMessage = PostCommentService.ReadAnonymousMessage)]
     [ProducesResponseType(typeof(ApiResponse<PostCommentPageResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetComments(
         int clubId,
@@ -58,6 +60,7 @@ public sealed class PostCommentController : ControllerBase
 
     [Authorize]
     [HttpPost("{clubId}/posts/{postId}/comments")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = PostCommentService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<PostCommentResponse>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateComment(
         int clubId, int postId, [FromBody] PostCommentCreateRequest request)
@@ -72,6 +75,7 @@ public sealed class PostCommentController : ControllerBase
 
     [Authorize]
     [HttpPut("{clubId}/posts/{postId}/comments/{commentId}")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = PostCommentService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<PostCommentResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateComment(
         int clubId, int postId, int commentId, [FromBody] PostCommentUpdateRequest request)
@@ -88,6 +92,7 @@ public sealed class PostCommentController : ControllerBase
 
     [Authorize]
     [HttpDelete("{clubId}/posts/{postId}/comments/{commentId}")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = PostCommentService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<PostCommentResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteComment(int clubId, int postId, int commentId)
     {
@@ -100,6 +105,7 @@ public sealed class PostCommentController : ControllerBase
 
     [Authorize]
     [HttpPut("{clubId}/posts/{postId}/comments/{commentId}/reaction")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = PostCommentService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<PostCommentReactionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SetReaction(
         int clubId, int postId, int commentId, [FromBody] PostCommentReactionRequest request)
@@ -112,6 +118,7 @@ public sealed class PostCommentController : ControllerBase
 
     [Authorize]
     [HttpDelete("{clubId}/posts/{postId}/comments/{commentId}/reaction")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = PostCommentService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<PostCommentReactionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ClearReaction(int clubId, int postId, int commentId)
     {

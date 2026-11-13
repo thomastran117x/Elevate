@@ -62,6 +62,15 @@ CI runs the **Auth Contract Gate** job on every pull request. It fails when the 
 
 Negative fixtures in the same file omit metadata, conflict, or drift from the reviewed list, and prove that each case fails the gate.
 
+Resource permissions are pinned by the tests in `backend.tests.Unit/Application/Security/Authorization/` (see [authorization](AUTHORIZATION.md#testing-permissions)):
+- **`PermissionMatrixGateTests`** fail when:
+  - an endpoint is missing from `ApprovedPermissionMatrix.cs`;
+  - an entry names an endpoint that no longer exists;
+  - an action's or hub method's `[RequirePermission]` declarations differ from the approved edge checks;
+  - a class contradicts the endpoint's metadata.
+- **`ResourceAuthorizerMatrixTests`** evaluate every row of the hand-written `PermissionExpectations.cs`, one per permission, caller and representative resource, against the real evaluators over SQLite.
+- **`AuthorizationDocumentTests`** fail when the generated matrix in `docs/AUTHORIZATION.md` is out of date.
+
 `backend.tests.Unit/Application/OpenApi/OpenApiAuthorizationContractTests.cs` reads the committed `backend/openapi.json`. Every operation must carry `x-authorization`, protected operations must require `bearerAuth`, and the anonymous operations must equal the reviewed list. The gate job then regenerates the document and fails on any difference from the committed files:
 
 ```powershell
@@ -74,7 +83,13 @@ Port 8097 matters: it is written into the document's server URL.
 `backend.tests.Integration/Application/Security/` runs as its own `authorization` CI shard:
 - `AuthorizationMatrixEndpointsTests.cs` repeats the metadata check against the running app's routed endpoints, including hubs and minimal endpoints.
 - It sends an anonymous request to **every** protected endpoint and requires the `401` `UNAUTHORIZED` "Missing access token" envelope. Unsafe methods carry a valid CSRF pair, because endpoints with `[ValidateAntiForgeryToken]` would otherwise answer 400 first. It sends one to **every** public endpoint and requires that none of them answers with that challenge. The probes come from the routed endpoints themselves, not a hand-kept list.
-- It also covers seeded public reads, the invalid-token and `403` envelopes, the `AdminOnly` policy against each global role, and club owner, manager, volunteer, unrelated-user, and admin access decided by the services.
+- It also covers seeded public reads, the invalid-token and `403` envelopes, and the `AdminOnly` policy against each global role. For club owner, manager, volunteer, unrelated-user and admin access it checks:
+  - owner powers held by admins but not managers;
+  - cross-club isolation;
+  - a removed manager refused on the same token;
+  - private-club content refused before child lookups;
+  - event state hidden from outsiders;
+  - participants' own records.
 - `RuntimeEndpointAuthorizationAuditTests.cs` is the runtime negative fixture. A throwaway host routes a minimal API and a controller without authorization metadata, and the gate must name both. It needs no containers.
 
 ### Monitoring definitions

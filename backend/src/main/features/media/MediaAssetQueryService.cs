@@ -1,4 +1,4 @@
-using backend.main.features.clubs;
+using backend.main.application.security.authorization;
 using backend.main.features.media.contracts.responses;
 using backend.main.shared.exceptions.http;
 
@@ -23,18 +23,18 @@ public interface IMediaAssetQueryService
 
 /// <summary>
 /// Read side of the media lifecycle. Separate from <see cref="IMediaAssetService"/> because it
-/// needs <see cref="IClubService"/> for the manager check, and the club service already depends on
-/// the upload service.
+/// needs the club manager check (<c>media.view</c>), and the club service already depends on the
+/// upload service.
 /// </summary>
 public sealed class MediaAssetQueryService : IMediaAssetQueryService
 {
     private readonly IMediaAssetRepository _repository;
-    private readonly IClubService _clubService;
+    private readonly IResourceAuthorizer _authorizer;
 
-    public MediaAssetQueryService(IMediaAssetRepository repository, IClubService clubService)
+    public MediaAssetQueryService(IMediaAssetRepository repository, IResourceAuthorizer authorizer)
     {
         _repository = repository;
-        _clubService = clubService;
+        _authorizer = authorizer;
     }
 
     public async Task<MediaAssetResponse> GetForViewerAsync(
@@ -44,8 +44,14 @@ public sealed class MediaAssetQueryService : IMediaAssetQueryService
         CancellationToken cancellationToken = default)
     {
         var asset = await _repository.GetByPublicIdAsync(publicId, cancellationToken);
-        if (asset == null || !await CanViewAsync(asset, userId, userRole))
+        if (asset == null || !await _authorizer.IsAllowedAsync(
+                ResourceActor.User(userId, userRole),
+                Permissions.MediaView,
+                new MediaAssetResource(publicId),
+                cancellationToken))
+        {
             throw new ResourceNotFoundException("Media asset not found.");
+        }
 
         return new MediaAssetResponse
         {
@@ -54,13 +60,5 @@ public sealed class MediaAssetQueryService : IMediaAssetQueryService
             Url = asset.Status == MediaAssetStatus.Ready ? asset.PublicUrl : null,
             RejectionReason = asset.Status == MediaAssetStatus.Rejected ? asset.RejectionReason : null
         };
-    }
-
-    private async Task<bool> CanViewAsync(MediaAsset asset, int userId, string? userRole)
-    {
-        if (asset.OwnerUserId == userId)
-            return true;
-
-        return asset.ClubId is int clubId && await _clubService.CanManageClubAsync(clubId, userId, userRole);
     }
 }

@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.clubs.follow.invitations.contracts.requests;
 using backend.main.features.clubs.follow.invitations.contracts.responses;
 using backend.main.shared.responses;
@@ -32,6 +33,7 @@ namespace backend.main.features.clubs.follow.invitations
 
         [Authorize]
         [HttpPost("{clubId}/members/invitations")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId", DenialMessage = ClubMemberInvitationService.OrganisersOnlyMessage)]
         [ProducesResponseType(typeof(ApiResponse<ClubMemberInvitationResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateInvitation(int clubId, [FromBody] CreateClubMemberInvitationRequest request)
         {
@@ -56,6 +58,7 @@ namespace backend.main.features.clubs.follow.invitations
 
         [Authorize]
         [HttpGet("{clubId}/members/invitations")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId", DenialMessage = ClubMemberInvitationService.OrganisersOnlyMessage)]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubMemberInvitationResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetInvitations(int clubId)
         {
@@ -76,6 +79,7 @@ namespace backend.main.features.clubs.follow.invitations
 
         [Authorize]
         [HttpPost("{clubId}/members/invitations/{recipientUserId}/revoke")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId", DenialMessage = ClubMemberInvitationService.OrganisersOnlyMessage)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RevokeInvitation(int clubId, int recipientUserId)
         {
@@ -97,6 +101,7 @@ namespace backend.main.features.clubs.follow.invitations
 
         [Authorize]
         [HttpPost("{clubId}/members/invitation-links")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId", DenialMessage = ClubMemberInvitationService.OrganisersOnlyMessage)]
         [ProducesResponseType(typeof(ApiResponse<ClubInvitationLinkResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateLink(int clubId, [FromBody] CreateClubMemberInviteLinkRequest request)
         {
@@ -122,6 +127,7 @@ namespace backend.main.features.clubs.follow.invitations
 
         [Authorize]
         [HttpGet("{clubId}/members/invitation-links")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId", DenialMessage = ClubMemberInvitationService.OrganisersOnlyMessage)]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubInvitationLinkResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetLinks(int clubId)
         {
@@ -142,6 +148,7 @@ namespace backend.main.features.clubs.follow.invitations
 
         [Authorize]
         [HttpPost("{clubId}/members/invitation-links/{linkId}/revoke")]
+        [RequirePermission(PermissionNames.ClubManage, "clubId", DenialMessage = ClubMemberInvitationService.OrganisersOnlyMessage)]
         [ProducesResponseType(typeof(ApiResponse<ClubInvitationLinkResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RevokeLink(int clubId, int linkId)
         {

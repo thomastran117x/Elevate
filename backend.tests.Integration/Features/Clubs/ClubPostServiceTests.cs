@@ -132,34 +132,6 @@ public class ClubPostServiceTests
             });
             await db.SaveChangesAsync();
 
-            var club = await db.Clubs.SingleAsync(c => c.Id == 4);
-
-            var clubService = new Mock<IClubService>();
-            clubService.Setup(service => service.GetClub(4))
-                .ReturnsAsync(club);
-            clubService.Setup(service => service.CanManageClubAsync(4, 55, "Participant"))
-                .ReturnsAsync(true);
-            clubService.Setup(service => service.CanManageClubAsync(4, 7, "Organizer"))
-                .ReturnsAsync(true);
-            clubService.Setup(service => service.CanManageClubAsync(4, 88, "Participant"))
-                .ReturnsAsync(false);
-            clubService.Setup(service => service.CanManageClubPostsAsync(4, 55, "Participant"))
-                .ReturnsAsync(true);
-            clubService.Setup(service => service.CanManageClubPostsAsync(4, 66, "Participant"))
-                .ReturnsAsync(true);
-            clubService.Setup(service => service.CanManageClubPostsAsync(4, 7, "Organizer"))
-                .ReturnsAsync(true);
-            clubService.Setup(service => service.CanManageClubPostsAsync(4, 88, "Participant"))
-                .ReturnsAsync(false);
-            clubService.Setup(service => service.HasClubStaffAccessAsync(4, 55, "Participant"))
-                .ReturnsAsync(true);
-            clubService.Setup(service => service.HasClubStaffAccessAsync(4, 66, "Participant"))
-                .ReturnsAsync(true);
-            clubService.Setup(service => service.HasClubStaffAccessAsync(4, 7, "Organizer"))
-                .ReturnsAsync(true);
-            clubService.Setup(service => service.HasClubStaffAccessAsync(4, 88, "Participant"))
-                .ReturnsAsync(false);
-
             var outboxWriter = new Mock<IClubPostSearchOutboxWriter>();
 
             var refreshCache = new Mock<IRefreshAheadCache>();
@@ -174,8 +146,8 @@ public class ClubPostServiceTests
                 db,
                 new ClubPostRepository(db),
                 new PostCommentRepository(db),
-                clubService.Object,
-                new FollowRepository(db),
+                // The production club rules over the seeded owner, manager and volunteer.
+                TestResourceAuthorizers.Over(db),
                 Mock.Of<IClubPostSearchService>(),
                 outboxWriter.Object,
                 userRepository.Object,

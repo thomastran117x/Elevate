@@ -2001,6 +2001,9 @@ namespace backend.main.features.events
                 ?? throw new ResourceNotFoundException($"Event {eventId} not found");
         }
 
+        // These re-check event.manage / event.media / club.manage for direct and transactional
+        // callers; IClubService answers them through the shared resource authorizer, so the
+        // rule is the one the endpoints declare.
         private async Task EnsureCanManageEventAsync(Events ev, int userId, string userRole)
         {
             if (!await _clubService.CanManageClubAsync(ev.ClubId, userId, userRole))
@@ -2129,9 +2132,6 @@ namespace backend.main.features.events
 
         private static IReadOnlyList<EventVersionFieldChange> DeserializeChangedFields(string changedFieldsJson) =>
             JsonSerializer.Deserialize<List<EventVersionFieldChange>>(changedFieldsJson) ?? [];
-
-        private static bool IsAdminRole(string? userRole) =>
-            string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
 
         private static string NormalizeActorRole(string actorRole) =>
             EventVersionRecorder.NormalizeActorRole(actorRole);

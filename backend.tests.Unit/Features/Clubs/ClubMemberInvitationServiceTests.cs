@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
+using backend.main.application.security.authorization;
 using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
@@ -11,6 +12,7 @@ using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -46,6 +48,7 @@ public class ClubMemberInvitationServiceTests
         public Mock<IFollowService> FollowServiceMock { get; } = new();
         public Mock<IUserRepository> UserRepositoryMock { get; } = new();
         public Mock<IPublisher> PublisherMock { get; } = new();
+        public Mock<IResourceAuthorizer> AuthorizerMock { get; } = TestResourceAuthorizers.Denying();
         public List<EmailMessage> Published { get; } = [];
         public ClubMemberInvitationService Service { get; }
 
@@ -66,7 +69,8 @@ public class ClubMemberInvitationServiceTests
                 UserRepositoryMock.Object,
                 PublisherMock.Object,
                 TimeProvider.System,
-                Db);
+                Db,
+                AuthorizerMock.Object);
         }
 
         public static async Task<Harness> CreateAsync()
@@ -116,9 +120,11 @@ public class ClubMemberInvitationServiceTests
                 });
 
         public void SetupCanManage(bool canManage = true) =>
-            ClubServiceMock
-                .Setup(s => s.CanManageClubAsync(ClubId, OwnerUserId, ActorRole))
-                .ReturnsAsync(canManage);
+            AuthorizerMock.Allow(
+                Permissions.ClubManage,
+                new ClubResource(ClubId),
+                OwnerUserId,
+                canManage ? PermissionOutcome.Allowed : PermissionOutcome.Denied);
 
         public void SetupIsMember(bool isMember) =>
             FollowServiceMock

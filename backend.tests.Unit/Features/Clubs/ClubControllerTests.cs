@@ -128,7 +128,7 @@ public class ClubControllerTests
     public async Task DeleteClub_ShouldReturnSuccessMessage()
     {
         var service = new Mock<IClubService>();
-        service.Setup(s => s.DeleteClub(4, 7)).Returns(Task.CompletedTask);
+        service.Setup(s => s.DeleteClub(4, 7, It.IsAny<string>())).Returns(Task.CompletedTask);
 
         var controller = CreateController(service.Object);
 

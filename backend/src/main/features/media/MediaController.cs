@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.media.contracts.responses;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
@@ -33,6 +34,7 @@ public class MediaController : ControllerBase
 
     [Authorize]
     [HttpGet("{publicId:guid}")]
+    [RequirePermission(PermissionNames.MediaView, "publicId")]
     [ProducesResponseType(typeof(ApiResponse<MediaAssetResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMediaAsset(Guid publicId, CancellationToken cancellationToken)
     {

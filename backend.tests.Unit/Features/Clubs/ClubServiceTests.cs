@@ -300,7 +300,7 @@ public class ClubServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
         var existing = await harness.SeedPersistedClubAsync(id: 71, userId: harness.OwnerUserId);
 
-        await harness.Service.DeleteClub(existing.Id, harness.OwnerUserId);
+        await harness.Service.DeleteClub(existing.Id, harness.OwnerUserId, harness.OwnerRole);
 
         (await harness.Db.Clubs.FindAsync(existing.Id)).Should().BeNull();
         harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync(existing.ClubImage), Times.Once);
@@ -315,7 +315,7 @@ public class ClubServiceTests
         await using var harness = await ClubServiceHarness.CreateAsync();
         var existing = await harness.SeedPersistedClubAsync(id: 72, userId: harness.OwnerUserId);
 
-        var action = () => harness.Service.DeleteClub(existing.Id, harness.MemberUserId);
+        var action = () => harness.Service.DeleteClub(existing.Id, harness.MemberUserId, "Participant");
 
         await action.Should()
             .ThrowAsync<ForbiddenException>()
@@ -551,7 +551,7 @@ public class ClubServiceTests
         ];
         await harness.Db.SaveChangesAsync();
 
-        await harness.Service.DeleteClub(existing.Id, harness.OwnerUserId);
+        await harness.Service.DeleteClub(existing.Id, harness.OwnerUserId, harness.OwnerRole);
 
         harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync(existing.ClubImage), Times.Once);
         harness.BlobServiceMock.Verify(service => service.DeleteBlobAsync("https://cdn.test/clubs/banner.png"), Times.Once);
@@ -870,6 +870,63 @@ public class ClubServiceTests
 
         (await harness.Db.ClubStaff.FirstOrDefaultAsync(item => item.ClubId == club.Id && item.UserId == harness.MemberUserId))
             .Should().BeNull();
+    }
+
+    [Fact]
+    public async Task OwnerActions_ShouldAllowAnAdmin()
+    {
+        // #331: Admin holds the owner's powers explicitly, as it already did for club management.
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        var club = await harness.SeedPersistedClubAsync(id: 141, userId: harness.OwnerUserId);
+        var adminId = harness.OtherOwnerUserId;
+        harness.UserServiceMock
+            .Setup(service => service.GetUserByIdAsync(harness.MemberUserId))
+            .ReturnsAsync(new User { Id = harness.MemberUserId, Email = "member@test.local", Usertype = "Participant" });
+
+        var staff = await harness.Service.AddStaffAsync(
+            club.Id, harness.MemberUserId, ClubStaffRole.Volunteer, adminId, "Admin");
+        staff.GrantedByUserId.Should().Be(adminId);
+
+        (await harness.Service.GetStaffAsync(club.Id, adminId, "Admin")).Should().ContainSingle();
+
+        await harness.Service.RemoveStaffAsync(club.Id, harness.MemberUserId, adminId, "Admin");
+        (await harness.Db.ClubStaff.AnyAsync(entry => entry.ClubId == club.Id)).Should().BeFalse();
+
+        var transferred = await harness.Service.TransferOwnershipAsync(club.Id, harness.MemberUserId, adminId, "Admin");
+        transferred.UserId.Should().Be(harness.MemberUserId);
+
+        await harness.Service.DeleteClub(club.Id, adminId, "Admin");
+        (await harness.Db.Clubs.FindAsync(club.Id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task OwnerActions_ShouldRefuseAManager()
+    {
+        await using var harness = await ClubServiceHarness.CreateAsync();
+        var club = await harness.SeedPersistedClubAsync(id: 142, userId: harness.OwnerUserId);
+        harness.Db.ClubStaff.Add(new ClubStaff
+        {
+            ClubId = club.Id,
+            UserId = harness.MemberUserId,
+            Role = ClubStaffRole.Manager,
+            GrantedByUserId = harness.OwnerUserId
+        });
+        await harness.Db.SaveChangesAsync();
+        var manager = harness.MemberUserId;
+
+        var actions = new Func<Task>[]
+        {
+            () => harness.Service.GetStaffAsync(club.Id, manager, "Participant"),
+            () => harness.Service.AddStaffAsync(club.Id, harness.OtherOwnerUserId, ClubStaffRole.Volunteer, manager, "Participant"),
+            () => harness.Service.RemoveStaffAsync(club.Id, manager, manager, "Participant"),
+            () => harness.Service.TransferOwnershipAsync(club.Id, manager, manager, "Participant"),
+            () => harness.Service.DeleteClub(club.Id, manager, "Participant"),
+        };
+
+        foreach (var action in actions)
+            await action.Should().ThrowAsync<ForbiddenException>().WithMessage("Not allowed");
+
+        (await harness.Db.Clubs.FindAsync(club.Id)).Should().NotBeNull();
     }
 
     [Fact]
@@ -1593,7 +1650,8 @@ public class ClubServiceTests
                 SearchServiceMock.Object,
                 OutboxWriterMock.Object,
                 Options.Create(new ClubVersioningOptions()),
-                TimeProvider.System);
+                TimeProvider.System,
+                TestResourceAuthorizers.Over(db));
         }
 
         public static async Task<ClubServiceHarness> CreateAsync()

@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.clubs.contracts.requests;
 using backend.main.features.clubs.contracts.responses;
 using backend.main.features.clubs.search;
@@ -108,6 +109,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPut("{id}")]
+        [RequirePermission(PermissionNames.ClubManage, "id")]
         [ProducesResponseType(typeof(ApiResponse<ClubResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateClub([FromBody] ClubUpdateRequest request, int id)
         {
@@ -143,12 +145,13 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpDelete("{id}")]
+        [RequirePermission(PermissionNames.ClubOwn, "id")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeleteClub(int id)
         {
             var userPayload = User.GetUserPayload();
 
-            await _clubService.DeleteClub(id, userPayload.Id);
+            await _clubService.DeleteClub(id, userPayload.Id, userPayload.Role);
 
             return StatusCode(
                 200,
@@ -247,6 +250,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpGet("{id}/staff")]
+        [RequirePermission(PermissionNames.ClubOwn, "id")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubStaffResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubStaff(int id, [FromQuery] string? search = null)
         {
@@ -282,6 +286,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("{id}/staff/managers")]
+        [RequirePermission(PermissionNames.ClubOwn, "id")]
         [ProducesResponseType(typeof(ApiResponse<ClubStaffResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> AddManager(int id, [FromBody] ClubStaffCreateRequest request)
         {
@@ -303,6 +308,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("{id}/staff/volunteers")]
+        [RequirePermission(PermissionNames.ClubOwn, "id")]
         [ProducesResponseType(typeof(ApiResponse<ClubStaffResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> AddVolunteer(int id, [FromBody] ClubStaffCreateRequest request)
         {
@@ -324,6 +330,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpDelete("{id}/staff/{userId}")]
+        [RequirePermission(PermissionNames.ClubOwn, "id")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RemoveStaff(int id, int userId)
         {
@@ -337,6 +344,7 @@ namespace backend.main.features.clubs
 
         [Authorize]
         [HttpPost("{id}/transfer-ownership")]
+        [RequirePermission(PermissionNames.ClubOwn, "id")]
         [ProducesResponseType(typeof(ApiResponse<ClubResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> TransferOwnership(int id, [FromBody] ClubOwnershipTransferRequest request)
         {
@@ -361,6 +369,7 @@ namespace backend.main.features.clubs
         [Authorize]
         [FeatureGate(FeatureFlagKeys.ClubsVersioning)]
         [HttpGet("{id}/versions")]
+        [RequirePermission(PermissionNames.ClubManage, "id")]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubVersionListItemResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubVersions(
             int id,
@@ -400,6 +409,7 @@ namespace backend.main.features.clubs
         [Authorize]
         [FeatureGate(FeatureFlagKeys.ClubsVersioning)]
         [HttpGet("{id}/versions/{versionNumber}")]
+        [RequirePermission(PermissionNames.ClubManage, "id")]
         [ProducesResponseType(typeof(ApiResponse<ClubVersionDetailResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClubVersion(int id, int versionNumber)
         {
@@ -421,6 +431,7 @@ namespace backend.main.features.clubs
         [Authorize]
         [FeatureGate(FeatureFlagKeys.ClubsVersioning)]
         [HttpPost("{id}/versions/{versionNumber}/rollback")]
+        [RequirePermission(PermissionNames.ClubManage, "id")]
         [ProducesResponseType(typeof(ApiResponse<ClubRollbackResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RollbackClubVersion(int id, int versionNumber)
         {

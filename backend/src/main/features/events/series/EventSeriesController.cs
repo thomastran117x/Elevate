@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.events.contracts.responses;
 using backend.main.features.events.series.contracts.requests;
 using backend.main.features.events.series.contracts.responses;
@@ -39,6 +40,7 @@ public class EventSeriesController : ControllerBase
     /// <summary>Expands a repeat rule without saving anything, for the wizard's live preview.</summary>
     [Authorize]
     [HttpPost("clubs/{clubId}/series/preview")]
+    [RequirePermission(PermissionNames.ClubManage, "clubId")]
     [ProducesResponseType(typeof(ApiResponse<EventSeriesPreviewResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> PreviewSeries(
         [Range(1, int.MaxValue)] int clubId,
@@ -63,6 +65,7 @@ public class EventSeriesController : ControllerBase
     /// <summary>Turns an existing draft into occurrence 0 of a new series.</summary>
     [Authorize]
     [HttpPost("{eventId}/series")]
+    [RequirePermission(PermissionNames.EventManage, "eventId")]
     [ProducesResponseType(typeof(ApiResponse<EventSeriesResponse>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateSeries(
         [Range(1, int.MaxValue)] int eventId,
@@ -86,6 +89,7 @@ public class EventSeriesController : ControllerBase
 
     [Authorize]
     [HttpGet("series/{seriesId}")]
+    [RequirePermission(PermissionNames.SeriesManage, "seriesId")]
     [ProducesResponseType(typeof(ApiResponse<EventSeriesResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSeries([Range(1, int.MaxValue)] int seriesId)
     {
@@ -105,6 +109,7 @@ public class EventSeriesController : ControllerBase
 
     [Authorize]
     [HttpGet("clubs/{clubId}/series")]
+    [RequirePermission(PermissionNames.ClubManage, "clubId")]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<EventSeriesSummaryResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetClubSeries(
         [Range(1, int.MaxValue)] int clubId,
@@ -135,6 +140,7 @@ public class EventSeriesController : ControllerBase
     /// <summary>Generates the extra occurrences a revised terminator adds.</summary>
     [Authorize]
     [HttpPost("series/{seriesId}/extend")]
+    [RequirePermission(PermissionNames.SeriesManage, "seriesId")]
     [ProducesResponseType(typeof(ApiResponse<EventSeriesResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExtendSeries(
         [Range(1, int.MaxValue)] int seriesId,
@@ -162,6 +168,7 @@ public class EventSeriesController : ControllerBase
     /// </summary>
     [Authorize]
     [HttpPost("series/{seriesId}/publish")]
+    [RequirePermission(PermissionNames.SeriesManage, "seriesId")]
     [ProducesResponseType(typeof(ApiResponse<EventSeriesBulkResultResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> PublishSeries([Range(1, int.MaxValue)] int seriesId)
     {
@@ -184,6 +191,7 @@ public class EventSeriesController : ControllerBase
     /// <summary>Applies a patch to this occurrence and every later one that has not yet started.</summary>
     [Authorize]
     [HttpPatch("series/{seriesId}/occurrences")]
+    [RequirePermission(PermissionNames.SeriesManage, "seriesId")]
     [ProducesResponseType(typeof(ApiResponse<EventSeriesBulkResultResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateFutureOccurrences(
         [Range(1, int.MaxValue)] int seriesId,
@@ -212,6 +220,7 @@ public class EventSeriesController : ControllerBase
     /// <summary>Cancels occurrences. Nothing is deleted, and the series row survives.</summary>
     [Authorize]
     [HttpPost("series/{seriesId}/cancel")]
+    [RequirePermission(PermissionNames.SeriesManage, "seriesId")]
     [ProducesResponseType(typeof(ApiResponse<EventSeriesBulkResultResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CancelSeries(
         [Range(1, int.MaxValue)] int seriesId,
@@ -243,6 +252,7 @@ public class EventSeriesController : ControllerBase
     /// </summary>
     [Authorize]
     [HttpDelete("series/{seriesId}")]
+    [RequirePermission(PermissionNames.SeriesManage, "seriesId")]
     [ProducesResponseType(typeof(ApiResponse<EventSeriesBulkResultResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteSeries(
         [Range(1, int.MaxValue)] int seriesId,
@@ -271,6 +281,7 @@ public class EventSeriesController : ControllerBase
     /// <summary>Detaches one occurrence, leaving it as an ordinary standalone event.</summary>
     [Authorize]
     [HttpPost("{eventId}/series/detach")]
+    [RequirePermission(PermissionNames.EventManage, "eventId")]
     [ProducesResponseType(typeof(ApiResponse<ManagedEventResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DetachOccurrence([Range(1, int.MaxValue)] int eventId)
     {

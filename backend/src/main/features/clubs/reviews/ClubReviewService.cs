@@ -1,3 +1,4 @@
+using backend.main.application.security.authorization;
 using backend.main.features.cache;
 using backend.main.features.clubs.search;
 using backend.main.features.profile;
@@ -15,6 +16,7 @@ namespace backend.main.features.clubs.reviews
         private readonly IUserRepository _userRepository;
         private readonly IClubSearchOutboxWriter _outboxWriter;
         private readonly ICacheService _cache;
+        private readonly IResourceAuthorizer _authorizer;
 
         public ClubReviewService(
             AppDatabaseContext db,
@@ -22,7 +24,8 @@ namespace backend.main.features.clubs.reviews
             IClubRepository clubRepository,
             IUserRepository userRepository,
             IClubSearchOutboxWriter outboxWriter,
-            ICacheService cache)
+            ICacheService cache,
+            IResourceAuthorizer authorizer)
         {
             _db = db;
             _reviewRepository = reviewRepository;
@@ -30,6 +33,7 @@ namespace backend.main.features.clubs.reviews
             _userRepository = userRepository;
             _outboxWriter = outboxWriter;
             _cache = cache;
+            _authorizer = authorizer;
         }
 
         public async Task<ClubReview> CreateReviewAsync(int clubId, int userId, string title, int rating, string? comment)
@@ -94,8 +98,7 @@ namespace backend.main.features.clubs.reviews
             if (review.ClubId != clubId)
                 throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
 
-            if (review.UserId != userId)
-                throw new ForbiddenException("You are not allowed to update this review.");
+            await EnsureAuthorAsync(review, userId, "update");
 
             var updated = await _reviewRepository.UpdateAsync(reviewId, new ClubReview
             {
@@ -117,13 +120,20 @@ namespace backend.main.features.clubs.reviews
             if (review.ClubId != clubId)
                 throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
 
-            if (review.UserId != userId)
-                throw new ForbiddenException("You are not allowed to delete this review.");
+            await EnsureAuthorAsync(review, userId, "delete");
 
             await _reviewRepository.DeleteAsync(reviewId);
 
             await UpdateClubRatingAsync(review.ClubId);
         }
+
+        // Known deviation recorded in the matrix: reviews are author-only, with no staff moderation.
+        private Task EnsureAuthorAsync(ClubReview review, int userId, string action) =>
+            _authorizer.EnsureAsync(
+                ResourceActor.User(userId, null),
+                Permissions.ContentAuthor,
+                new AuthoredContentResource("Review", review.Id, review.UserId),
+                new PermissionMessages($"You are not allowed to {action} this review."));
 
         private async Task UpdateClubRatingAsync(int clubId)
         {

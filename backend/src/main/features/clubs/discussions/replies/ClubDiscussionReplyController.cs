@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.clubs.discussions.replies.contracts.requests;
 using backend.main.features.clubs.discussions.replies.contracts.responses;
 using backend.main.features.clubs.realtime;
@@ -35,6 +36,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
 
     [AllowAnonymous]
     [HttpGet("{clubId}/discussions/{discussionId}/replies")]
+    [RequirePermission(PermissionNames.ClubRead, "clubId", DenialMessage = ClubDiscussionReplyService.ReadForbiddenMessage, AnonymousDenialMessage = ClubDiscussionReplyService.ReadAnonymousMessage)]
     [ProducesResponseType(typeof(ApiResponse<DiscussionReplyPageResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReplies(
         int clubId,
@@ -60,6 +62,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
 
     [Authorize]
     [HttpPost("{clubId}/discussions/{discussionId}/replies")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = ClubDiscussionReplyService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<DiscussionReplyResponse>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateReply(
         int clubId, int discussionId, [FromBody] DiscussionReplyCreateRequest request)
@@ -74,6 +77,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
 
     [Authorize]
     [HttpPut("{clubId}/discussions/{discussionId}/replies/{replyId}")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = ClubDiscussionReplyService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<DiscussionReplyResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateReply(
         int clubId, int discussionId, int replyId, [FromBody] DiscussionReplyUpdateRequest request)
@@ -90,6 +94,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
 
     [Authorize]
     [HttpDelete("{clubId}/discussions/{discussionId}/replies/{replyId}")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = ClubDiscussionReplyService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<DiscussionReplyResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteReply(int clubId, int discussionId, int replyId)
     {
@@ -102,6 +107,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
 
     [Authorize]
     [HttpPut("{clubId}/discussions/{discussionId}/replies/{replyId}/reaction")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = ClubDiscussionReplyService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<DiscussionReplyReactionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SetReaction(
         int clubId, int discussionId, int replyId, [FromBody] DiscussionReplyReactionRequest request)
@@ -114,6 +120,7 @@ public sealed class ClubDiscussionReplyController : ControllerBase
 
     [Authorize]
     [HttpDelete("{clubId}/discussions/{discussionId}/replies/{replyId}/reaction")]
+    [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = ClubDiscussionReplyService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<DiscussionReplyReactionResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ClearReaction(int clubId, int discussionId, int replyId)
     {

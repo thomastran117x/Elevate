@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.events.contracts.requests;
 using backend.main.features.events.recentlyviewed.contracts.requests;
 using backend.main.features.events.recentlyviewed.contracts.responses;
@@ -33,6 +34,7 @@ namespace backend.main.features.events.recentlyviewed
 
         [Authorize]
         [HttpPost("{eventId}/view")]
+        [RequirePermission(PermissionNames.EventView, "eventId")]
         [ProducesResponseType(typeof(ApiResponse<RecordEventViewResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> RecordView([Range(1, int.MaxValue)] int eventId)
         {

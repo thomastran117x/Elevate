@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.clubs.discussions.replies;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.realtime.contracts.responses;
@@ -16,8 +17,9 @@ namespace backend.main.features.clubs.realtime;
 /// </summary>
 /// <remarks>
 /// Anonymous by default, matching the SSE endpoints it replaces — public clubs stream to
-/// logged-out visitors. Every join re-runs the same authorization gate the REST endpoints
-/// use, so access is re-checked far more often than the old once-per-stream check.
+/// logged-out visitors. Every join declares the same <c>club.read</c> permission the REST reads
+/// use, enforced by <see cref="ResourcePermissionHubFilter"/> before the method runs, and the
+/// method re-checks it (with the thread's ownership) through the service.
 /// Anonymous connections receive events but never appear in the roster and cannot type.
 /// </remarks>
 [AllowAnonymous]
@@ -48,9 +50,12 @@ public sealed class ClubRealtimeHub : Hub
     /// <summary>
     /// Subscribes to a club: discussion reply events plus the club-wide presence roster.
     /// </summary>
+    [FeatureGate(FeatureFlagKeys.Clubs)]
+    [RequirePermission(PermissionNames.ClubRead, "clubId",
+        DenialMessage = ClubDiscussionReplyService.ReadForbiddenMessage,
+        AnonymousDenialMessage = ClubDiscussionReplyService.ReadAnonymousMessage)]
     public async Task JoinClub(int clubId)
     {
-        EnsureFeature(FeatureFlagKeys.Clubs);
         var (userId, userRole) = GetOptionalUser();
         await _replyService.EnsureCanReadClubAsync(clubId, userId, userRole);
 
@@ -79,9 +84,12 @@ public sealed class ClubRealtimeHub : Hub
     /// more online members than the cap, members outside it are never named by a diff, so a
     /// client whose visible list has drained needs a way to refill it.
     /// </remarks>
+    [FeatureGate(FeatureFlagKeys.Clubs)]
+    [RequirePermission(PermissionNames.ClubRead, "clubId",
+        DenialMessage = ClubDiscussionReplyService.ReadForbiddenMessage,
+        AnonymousDenialMessage = ClubDiscussionReplyService.ReadAnonymousMessage)]
     public async Task RequestPresence(int clubId)
     {
-        EnsureFeature(FeatureFlagKeys.Clubs);
         var (userId, userRole) = GetOptionalUser();
         await _replyService.EnsureCanReadClubAsync(clubId, userId, userRole);
 
@@ -97,9 +105,12 @@ public sealed class ClubRealtimeHub : Hub
     }
 
     /// <summary>Subscribes to a discussion's typing group. Reply events arrive via the club group.</summary>
+    [FeatureGate(FeatureFlagKeys.ClubsDiscussions)]
+    [RequirePermission(PermissionNames.ClubRead, "clubId",
+        DenialMessage = ClubDiscussionReplyService.ReadForbiddenMessage,
+        AnonymousDenialMessage = ClubDiscussionReplyService.ReadAnonymousMessage)]
     public async Task JoinDiscussion(int clubId, int discussionId)
     {
-        EnsureFeature(FeatureFlagKeys.ClubsDiscussions);
         var (userId, userRole) = GetOptionalUser();
 
         // The typing group is keyed on the discussion alone, so authorizing only the
@@ -118,9 +129,12 @@ public sealed class ClubRealtimeHub : Hub
         ReleaseThreadAsync(ClubRealtimeGroups.DiscussionThread(discussionId));
 
     /// <summary>Subscribes to a post's comment events and its typing group.</summary>
+    [FeatureGate(FeatureFlagKeys.ClubsPosts)]
+    [RequirePermission(PermissionNames.ClubRead, "clubId",
+        DenialMessage = PostCommentService.ReadForbiddenMessage,
+        AnonymousDenialMessage = PostCommentService.ReadAnonymousMessage)]
     public async Task JoinPost(int clubId, int postId)
     {
-        EnsureFeature(FeatureFlagKeys.ClubsPosts);
         var (userId, userRole) = GetOptionalUser();
         await _commentService.EnsureCanReadPostAsync(clubId, postId, userId, userRole);
 
@@ -212,7 +226,8 @@ public sealed class ClubRealtimeHub : Hub
     private void EnsureFeature(string featureKey)
     {
         // FeatureGateConvention is an MVC application-model convention and does not reach
-        // hubs, so the flag has to be checked by hand here.
+        // hubs. Joins declare [FeatureGate], which ResourcePermissionHubFilter enforces; typing
+        // picks its flag from the thread kind, so it checks by hand.
         if (!_featureFlags.IsEnabled(featureKey))
             throw new HubException($"The '{featureKey}' feature is disabled.");
     }

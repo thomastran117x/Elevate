@@ -5,8 +5,10 @@ namespace backend.main.application.security
     /// </summary>
     /// <remarks>
     /// Every endpoint without an authorization attribute falls back to requiring an authenticated
-    /// user, so these named policies only narrow access further by global role. Resource ownership
-    /// and club staff checks stay in the service layer.
+    /// user, so these named policies only narrow access further by global role. Resource ownership,
+    /// club staff and membership decisions are catalog permissions in
+    /// <see cref="authorization.Permissions"/>, declared with
+    /// <see cref="authorization.RequirePermissionAttribute"/> and re-checked by the services.
     /// </remarks>
     public static class AuthorizationPolicies
     {

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 
 using backend.main.application.bootstrap;
+using backend.main.application.security.authorization;
 using backend.main.features.auth;
 using backend.main.features.auth.events;
 using backend.main.features.auth.sessions;
@@ -151,6 +152,7 @@ namespace backend.main.application.security
                     p.RequireRole(AuthRoles.Organizer));
             });
             services.AddSingleton<IAuthorizationMiddlewareResultHandler, UnmatchedRouteAuthorizationResultHandler>();
+            services.AddResourceAuthorization();
             return services;
         }
     }

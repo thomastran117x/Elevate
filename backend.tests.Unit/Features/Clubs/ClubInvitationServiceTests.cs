@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
+using backend.main.application.security.authorization;
 using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.invitations;
@@ -11,6 +12,7 @@ using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.providers;
 using backend.main.shared.providers.messages;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -39,6 +41,7 @@ public class ClubInvitationServiceTests
         public Mock<IClubService> ClubServiceMock { get; } = new(MockBehavior.Strict);
         public Mock<IUserRepository> UserRepositoryMock { get; } = new();
         public Mock<IPublisher> PublisherMock { get; } = new();
+        public Mock<IResourceAuthorizer> AuthorizerMock { get; } = TestResourceAuthorizers.Denying();
         public List<EmailMessage> Published { get; } = [];
         public ClubInvitationService Service { get; }
 
@@ -54,7 +57,8 @@ public class ClubInvitationServiceTests
                 ClubServiceMock.Object,
                 UserRepositoryMock.Object,
                 PublisherMock.Object,
-                TimeProvider.System);
+                TimeProvider.System,
+                AuthorizerMock.Object);
         }
 
         public void SetupClub() =>
@@ -71,9 +75,11 @@ public class ClubInvitationServiceTests
                 });
 
         public void SetupOwner(bool isOwner = true) =>
-            ClubServiceMock
-                .Setup(s => s.IsClubOwnerAsync(ClubId, OwnerUserId, OwnerRole))
-                .ReturnsAsync(isOwner);
+            AuthorizerMock.Allow(
+                Permissions.ClubOwn,
+                new ClubResource(ClubId),
+                OwnerUserId,
+                isOwner ? PermissionOutcome.Allowed : PermissionOutcome.Denied);
 
         public void SetupExistingStaff(bool isStaff) =>
             ClubServiceMock
