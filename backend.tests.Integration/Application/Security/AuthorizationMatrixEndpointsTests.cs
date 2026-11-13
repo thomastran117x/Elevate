@@ -217,9 +217,9 @@ public class AuthorizationMatrixEndpointsTests
             ["admin"] = admin.AccessToken,
         };
 
-        // Owner only, with no admin bypass.
+        // Owner powers: the owner and, explicitly, admins (#331). Managers are refused.
         await AssertAccessAsync(app, callers, HttpMethod.Get, $"/api/clubs/{clubId}/staff",
-            allowed: ["owner"]);
+            allowed: ["owner", "admin"]);
 
         // Club management: owner, managers, and admins.
         await AssertAccessAsync(app, callers, HttpMethod.Get, $"/api/events/clubs/{clubId}/manage",
@@ -230,6 +230,87 @@ public class AuthorizationMatrixEndpointsTests
         // Event media: any club staff, including volunteers.
         await AssertAccessAsync(app, callers, HttpMethod.Get, $"/api/events/{eventId}/images",
             allowed: ["owner", "manager", "volunteer", "admin"]);
+    }
+
+    [Fact]
+    public async Task ClubOwnerPowers_ShouldBeHeldByTheOwnerAndAdminsButNotManagers()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateSessionAsync(app, "authz-own-owner@example.com", "Organizer");
+        var manager = await CreateSessionAsync(app, "authz-own-manager@example.com", "Participant");
+        await CreateSessionAsync(app, "authz-own-helper@example.com", "Participant");
+        var admin = await CreateSessionAsync(app, "authz-own-admin@example.com", "Admin");
+
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Authz Owner Powers Club");
+        var ownerUser = (await app.FindUserByEmailAsync("authz-own-owner@example.com"))!;
+        var managerUser = (await app.FindUserByEmailAsync("authz-own-manager@example.com"))!;
+        var helperUser = (await app.FindUserByEmailAsync("authz-own-helper@example.com"))!;
+        await app.AddClubStaffAsync(clubId, managerUser.Id, ownerUser.Id, ClubStaffRole.Manager);
+
+        // A manager runs the club but holds none of the owner's powers; the edge refuses before
+        // the service runs, with the same messages the services use.
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Get, $"/api/clubs/{clubId}/staff", "Not allowed");
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/staff/volunteers",
+            "Not allowed", new { userId = helperUser.Id });
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/transfer-ownership",
+            "Not allowed", new { newOwnerUserId = managerUser.Id });
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/staff/invitations",
+            "Only the club owner can manage staff invitations.", new { identifier = helperUser.Email, role = "Volunteer" });
+        await AssertRefusedAsync(app, manager.AccessToken, HttpMethod.Delete, $"/api/clubs/{clubId}", "Not allowed");
+
+        // Admins hold the owner's powers explicitly (#331).
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Get, $"/api/clubs/{clubId}/staff", HttpStatusCode.OK);
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/staff/volunteers",
+            HttpStatusCode.Created, new { userId = helperUser.Id });
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Delete, $"/api/clubs/{clubId}/staff/{helperUser.Id}",
+            HttpStatusCode.OK);
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/transfer-ownership",
+            HttpStatusCode.OK, new { newOwnerUserId = managerUser.Id });
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Delete, $"/api/clubs/{clubId}", HttpStatusCode.OK);
+        await AssertStatusAsync(app, admin.AccessToken, HttpMethod.Get, $"/api/clubs/{clubId}/staff", HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task ClubStaffRoles_ShouldStayInTheirClubAndTakeEffectOnTheNextRequest()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var ownerA = await CreateSessionAsync(app, "authz-iso-owner-a@example.com", "Organizer");
+        var ownerB = await CreateSessionAsync(app, "authz-iso-owner-b@example.com", "Organizer");
+        var managerB = await CreateSessionAsync(app, "authz-iso-manager-b@example.com", "Participant");
+
+        var clubA = await CreateClubAsync(app, ownerA.AccessToken, "Authz Isolation Club A");
+        var clubB = await CreateClubAsync(app, ownerB.AccessToken, "Authz Isolation Club B");
+        var ownerBUser = (await app.FindUserByEmailAsync("authz-iso-owner-b@example.com"))!;
+        var managerBUser = (await app.FindUserByEmailAsync("authz-iso-manager-b@example.com"))!;
+        await app.AddClubStaffAsync(clubB, managerBUser.Id, ownerBUser.Id, ClubStaffRole.Manager);
+
+        await AssertStatusAsync(app, managerB.AccessToken, HttpMethod.Get, $"/api/events/clubs/{clubB}/manage", HttpStatusCode.OK);
+        await AssertRefusedAsync(app, managerB.AccessToken, HttpMethod.Get, $"/api/events/clubs/{clubA}/manage", "Not allowed");
+        await AssertRefusedAsync(app, managerB.AccessToken, HttpMethod.Get, $"/api/clubs/{clubA}/members/invitations",
+            "Only club organisers can manage member invitations.");
+
+        await AssertStatusAsync(app, ownerB.AccessToken, HttpMethod.Delete, $"/api/clubs/{clubB}/staff/{managerBUser.Id}",
+            HttpStatusCode.OK);
+
+        // Same access token: staff roles are read from the database on every check.
+        await AssertRefusedAsync(app, managerB.AccessToken, HttpMethod.Get, $"/api/events/clubs/{clubB}/manage", "Not allowed");
+    }
+
+    private static async Task AssertRefusedAsync(
+        AuthApiTestApp app, string accessToken, HttpMethod method, string path, string message, object? body = null)
+    {
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            method, path, accessToken, body is null ? null : JsonContent.Create(body)));
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, await app.DescribeFailureAsync(response));
+        await AssertEnvelopeAsync(response, "FORBIDDEN", message);
+    }
+
+    private static async Task AssertStatusAsync(
+        AuthApiTestApp app, string accessToken, HttpMethod method, string path, HttpStatusCode expected, object? body = null)
+    {
+        var response = await app.Client.SendAsync(CreateAuthorizedRequest(
+            method, path, accessToken, body is null ? null : JsonContent.Create(body)));
+        response.StatusCode.Should().Be(expected, $"{method} {path}: {await app.DescribeFailureAsync(response)}");
     }
 
     private static async Task AssertAccessAsync(

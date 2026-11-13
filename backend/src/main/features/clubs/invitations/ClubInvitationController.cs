@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.clubs.invitations.contracts.requests;
 using backend.main.features.clubs.invitations.contracts.responses;
 using backend.main.shared.exceptions.http;
@@ -29,6 +30,7 @@ namespace backend.main.features.clubs.invitations
 
         [Authorize]
         [HttpPost("{clubId}/staff/invitations")]
+        [RequirePermission(PermissionNames.ClubOwn, "clubId", DenialMessage = ClubInvitationService.OwnerOnlyMessage)]
         [ProducesResponseType(typeof(ApiResponse<ClubInvitationResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateInvitation(int clubId, [FromBody] CreateClubStaffInvitationRequest request)
         {
@@ -54,6 +56,7 @@ namespace backend.main.features.clubs.invitations
 
         [Authorize]
         [HttpGet("{clubId}/staff/invitations")]
+        [RequirePermission(PermissionNames.ClubOwn, "clubId", DenialMessage = ClubInvitationService.OwnerOnlyMessage)]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<ClubInvitationResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetInvitations(int clubId)
         {
@@ -74,6 +77,7 @@ namespace backend.main.features.clubs.invitations
 
         [Authorize]
         [HttpPost("{clubId}/staff/invitations/{recipientUserId}/revoke")]
+        [RequirePermission(PermissionNames.ClubOwn, "clubId", DenialMessage = ClubInvitationService.OwnerOnlyMessage)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RevokeInvitation(int clubId, int recipientUserId)
         {

@@ -352,7 +352,7 @@ public class ClubVersioningServiceTests
 
         await harness.Service.AddStaffAsync(created.Id, 55, backend.main.features.clubs.staff.ClubStaffRole.Manager, 7, "Organizer");
 
-        var act = () => harness.Service.DeleteClub(created.Id, 55);
+        var act = () => harness.Service.DeleteClub(created.Id, 55, "Participant");
 
         await act.Should()
             .ThrowAsync<ForbiddenException>()
@@ -716,7 +716,8 @@ public class ClubVersioningServiceTests
                     PurgeBatchSize = 20,
                     PurgeEnabled = true
                 }),
-                timeProvider);
+                timeProvider,
+                TestResourceAuthorizers.Over(db));
 
             return new ClubServiceHarness(database, db, service, timeProvider, uploadUserByUrl);
         }

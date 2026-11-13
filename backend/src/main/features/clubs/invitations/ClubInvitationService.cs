@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
+using backend.main.application.security.authorization;
 using backend.main.features.cache;
 using backend.main.features.clubs.invitations.contracts.responses;
 using backend.main.features.clubs.staff;
@@ -21,6 +22,7 @@ namespace backend.main.features.clubs.invitations
         private readonly IUserRepository _userRepository;
         private readonly IPublisher _publisher;
         private readonly TimeProvider _timeProvider;
+        private readonly IResourceAuthorizer _authorizer;
 
         private static readonly TimeSpan InvitationTtl = TimeSpan.FromDays(14);
 
@@ -29,14 +31,18 @@ namespace backend.main.features.clubs.invitations
             IClubService clubService,
             IUserRepository userRepository,
             IPublisher publisher,
-            TimeProvider timeProvider)
+            TimeProvider timeProvider,
+            IResourceAuthorizer authorizer)
         {
             _cache = cache;
             _clubService = clubService;
             _userRepository = userRepository;
             _publisher = publisher;
             _timeProvider = timeProvider;
+            _authorizer = authorizer;
         }
+
+        public const string OwnerOnlyMessage = "Only the club owner can manage staff invitations.";
 
         private static string TokenKey(string tokenHash) => $"club:invite:token:{tokenHash}";
 
@@ -257,11 +263,13 @@ namespace backend.main.features.clubs.invitations
             await _cache.HashDeleteAsync(ClubIndexKey(clubId), invite.RecipientUserId.ToString());
         }
 
-        private async Task EnsureOwnerAsync(int clubId, int actorUserId, string actorRole)
-        {
-            if (!await _clubService.IsClubOwnerAsync(clubId, actorUserId, actorRole))
-                throw new ForbiddenException("Only the club owner can manage staff invitations.");
-        }
+        // club.own: the owner, or an admin acting for them (#331).
+        private Task EnsureOwnerAsync(int clubId, int actorUserId, string actorRole) =>
+            _authorizer.EnsureAsync(
+                ResourceActor.User(actorUserId, actorRole),
+                Permissions.ClubOwn,
+                new ClubResource(clubId),
+                new PermissionMessages(OwnerOnlyMessage));
 
         private async Task<ClubInvitationClubSummaryResponse?> TryGetClubSummaryAsync(int clubId)
         {
