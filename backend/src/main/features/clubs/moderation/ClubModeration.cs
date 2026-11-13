@@ -91,7 +91,15 @@ public static class ClubModeration
         var trimmed = text?.Trim();
         if (string.IsNullOrEmpty(trimmed))
             return null;
-        return trimmed.Length <= SnapshotMaxLength ? trimmed : trimmed[..SnapshotMaxLength] + "…";
+        if (trimmed.Length <= SnapshotMaxLength)
+            return trimmed;
+
+        // Never keep half of a surrogate pair: a lone high surrogate is invalid Unicode, the
+        // database driver refuses to encode it, and the removal it records would roll back.
+        var cut = char.IsHighSurrogate(trimmed[SnapshotMaxLength - 1])
+            ? SnapshotMaxLength - 1
+            : SnapshotMaxLength;
+        return trimmed[..cut] + "…";
     }
 
     private static string RoleOf(ResourceActor actor, ResourceRelationship held)

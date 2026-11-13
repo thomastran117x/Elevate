@@ -139,6 +139,43 @@ public class ClubModerationTests
     }
 
     [Fact]
+    public void Entry_ShouldNotSplitASurrogatePairWhenTruncating()
+    {
+        // The emoji's two UTF-16 units straddle the cut: positions 199 and 200.
+        var text = new string('a', ClubModeration.SnapshotMaxLength - 1) + "😀" + "tail";
+
+        var entry = ClubModeration.Entry(
+            ContentBy(MemberId),
+            ManagerId,
+            new ModerationDecision(true, ClubModerationRoles.Manager),
+            ClubModerationActionTypes.Remove,
+            text,
+            "Spam");
+
+        entry.ContentSnapshot.Should().Be(new string('a', ClubModeration.SnapshotMaxLength - 1) + "…");
+        var strictUtf8 = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+        var encode = () => strictUtf8.GetBytes(entry.ContentSnapshot!);
+        encode.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Entry_ShouldKeepAWholeSurrogatePairThatEndsAtTheCut()
+    {
+        // The emoji fills positions 198 and 199, so it fits entirely before the cut.
+        var text = new string('a', ClubModeration.SnapshotMaxLength - 2) + "😀" + "tail";
+
+        var entry = ClubModeration.Entry(
+            ContentBy(MemberId),
+            ManagerId,
+            new ModerationDecision(true, ClubModerationRoles.Manager),
+            ClubModerationActionTypes.Remove,
+            text,
+            "Spam");
+
+        entry.ContentSnapshot.Should().Be(new string('a', ClubModeration.SnapshotMaxLength - 2) + "😀…");
+    }
+
+    [Fact]
     public void Entry_ShouldStoreNoSnapshotForBlankContent()
     {
         var entry = ClubModeration.Entry(
