@@ -29380,6 +29380,7 @@
             "$ref": "#/components/schemas/String"
           },
           "postType": {
+            "description": "Sent by the client as its name; the number is still accepted.",
             "$ref": "#/components/schemas/PostType"
           },
           "isPinned": {
@@ -29465,6 +29466,7 @@
             "$ref": "#/components/schemas/String"
           },
           "postType": {
+            "description": "Sent by the client as its name; the number is still accepted.",
             "$ref": "#/components/schemas/PostType"
           },
           "isPinned": {
