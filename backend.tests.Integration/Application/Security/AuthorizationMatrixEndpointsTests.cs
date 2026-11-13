@@ -8,6 +8,8 @@ using backend.main.features.auth.contracts.responses;
 using backend.main.features.auth.token;
 using backend.main.features.clubs.staff;
 using backend.main.features.events;
+using backend.main.features.payment;
+using backend.main.shared.exceptions.http;
 
 using backend.tests.Integration.Infrastructure;
 
@@ -16,6 +18,8 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace backend.tests.Integration.Application.Security;
 
@@ -357,7 +361,13 @@ public class AuthorizationMatrixEndpointsTests
     [Fact]
     public async Task ParticipantRecords_ShouldBeReadableByTheirOwnerOnly()
     {
-        await using var app = await AuthApiTestApp.CreateAsync();
+        // Stripe is not configured in tests, so only the payment provider is replaced; the
+        // payment.owner decision still reads the seeded row from the database.
+        await using var app = await AuthApiTestApp.CreateAsync(services =>
+        {
+            services.RemoveAll<IPaymentService>();
+            services.AddScoped<IPaymentService, RepositoryBackedPaymentService>();
+        });
         var owner = await CreateSessionAsync(app, "authz-self-owner@example.com", "Organizer");
         var payer = await CreateSessionAsync(app, "authz-self-payer@example.com", "Participant");
         var other = await CreateSessionAsync(app, "authz-self-other@example.com", "Participant");
@@ -365,7 +375,7 @@ public class AuthorizationMatrixEndpointsTests
 
         var clubId = await CreateClubAsync(app, owner.AccessToken, "Authz Self Club");
         var eventId = await CreatePublishedEventAsync(app, owner.AccessToken, clubId, "Authz Self Event");
-        await app.AddPaymentAsync(eventId, payerUser.Id, backend.main.features.payment.PaymentStatus.Succeeded);
+        await app.AddPaymentAsync(eventId, payerUser.Id, PaymentStatus.Succeeded);
         var paymentId = await app.QueryDbAsync(db => db.Payments
             .Where(payment => payment.UserId == payerUser.Id)
             .Select(payment => payment.Id)
@@ -573,5 +583,22 @@ public class AuthorizationMatrixEndpointsTests
     private sealed class PresignedUrlModel
     {
         public string PublicUrl { get; set; } = string.Empty;
+    }
+
+    private sealed class RepositoryBackedPaymentService(IPaymentRepository payments) : IPaymentService
+    {
+        public async Task<Payment> GetPayment(int paymentId) =>
+            await payments.GetByIdAsync(paymentId)
+            ?? throw new ResourceNotFoundException($"Payment {paymentId} not found.");
+
+        public Task<Payment> CreatePaymentSession(int userId, string userRole, int eventId, string? idempotencyKey = null) =>
+            throw new NotSupportedException();
+
+        public Task<List<Payment>> GetPaymentsByUser(int userId, int page = 1, int pageSize = 20) =>
+            payments.GetByUserIdAsync(userId, page, pageSize);
+
+        public Task HandleWebhook(string payload, string signature) => throw new NotSupportedException();
+
+        public Task<Payment> RefundPayment(int paymentId, int requestingUserId) => throw new NotSupportedException();
     }
 }
