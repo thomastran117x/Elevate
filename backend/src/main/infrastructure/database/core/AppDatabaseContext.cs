@@ -13,6 +13,7 @@ using backend.main.features.clubs.discussions;
 using backend.main.features.clubs.discussions.replies;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.invitations;
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
@@ -47,6 +48,7 @@ namespace backend.main.infrastructure.database.core
         public DbSet<Club> Clubs { get; set; } = null!;
         public DbSet<ClubStaff> ClubStaff { get; set; } = null!;
         public DbSet<ClubVersion> ClubVersions { get; set; } = null!;
+        public DbSet<ClubModerationAction> ClubModerationActions { get; set; } = null!;
         public DbSet<Events> Events { get; set; } = null!;
         public DbSet<EventVersion> EventVersions { get; set; } = null!;
         public DbSet<EventSeries> EventSeries { get; set; } = null!;
@@ -252,6 +254,22 @@ namespace backend.main.infrastructure.database.core
 
             modelBuilder.Entity<ClubVersion>()
                 .HasIndex(v => v.ClubImage);
+
+            modelBuilder.Entity<ClubModerationAction>(entry =>
+            {
+                entry.HasOne<Club>()
+                    .WithMany()
+                    .HasForeignKey(action => action.ClubId)
+                    .IsRequired()
+                    .OnDelete(DeleteBehavior.Cascade);
+                entry.Property(action => action.ActorClubRole).HasMaxLength(32);
+                entry.Property(action => action.Action).HasMaxLength(32);
+                entry.Property(action => action.ContentType).HasMaxLength(32);
+                entry.Property(action => action.ContentSnapshot).HasMaxLength(ClubModeration.SnapshotMaxLength + 1);
+                entry.Property(action => action.Reason).HasMaxLength(ClubModeration.ReasonMaxLength);
+                entry.HasIndex(action => new { action.ClubId, action.CreatedAt })
+                    .IsDescending(false, true);
+            });
 
             modelBuilder.Entity<FollowClub>()
                 .HasOne<User>()

@@ -292,6 +292,7 @@ inside the service. Every endpoint the backend declares appears here exactly onc
 | `POST /api/clubs/{clubId}/members/invitations` | Resource | `club.manage` on `clubId` | `club.manage` |  |
 | `POST /api/clubs/{clubId}/members/invitations/{recipientUserId}/revoke` | Resource | `club.manage` on `clubId` | `club.manage` |  |
 | `GET /api/clubs/{clubId}/members/me` | Self |  |  | The caller's own membership. |
+| `GET /api/clubs/{clubId}/moderation-log` | Resource | `club.manage` on `clubId` | `club.manage` |  |
 | `GET /api/clubs/{clubId}/posts` | Resource | `club.read` on `clubId` | `club.read` |  |
 | `POST /api/clubs/{clubId}/posts` | Resource | `club.staff` on `clubId` | `club.staff` |  |
 | `DELETE /api/clubs/{clubId}/posts/{id}` | Resource | `club.staff` on `clubId` | `club.staff` | Known deviation: any staff member may delete any post. |

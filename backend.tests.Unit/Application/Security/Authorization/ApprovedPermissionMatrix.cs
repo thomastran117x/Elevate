@@ -133,6 +133,7 @@ public static class ApprovedPermissionMatrix
         ["POST /api/clubs/{clubId}/members/invitations"] = Resource([Edge(PermissionNames.ClubManage, "clubId")], [PermissionNames.ClubManage]),
         ["POST /api/clubs/{clubId}/members/invitations/{recipientUserId}/revoke"] = Resource([Edge(PermissionNames.ClubManage, "clubId")], [PermissionNames.ClubManage]),
         ["GET /api/clubs/{clubId}/members/me"] = Self("The caller's own membership."),
+        ["GET /api/clubs/{clubId}/moderation-log"] = Resource([Edge(PermissionNames.ClubManage, "clubId")], [PermissionNames.ClubManage]),
         ["GET /api/clubs/{clubId}/posts"] = Resource([Edge(PermissionNames.ClubRead, "clubId")], [PermissionNames.ClubRead]),
         ["POST /api/clubs/{clubId}/posts"] = Resource([Edge(PermissionNames.ClubStaff, "clubId")], [PermissionNames.ClubStaff]),
         ["DELETE /api/clubs/{clubId}/posts/{id}"] = Resource([Edge(PermissionNames.ClubStaff, "clubId")], [PermissionNames.ClubStaff], "Known deviation: any staff member may delete any post."),
