@@ -329,6 +329,30 @@ public class AuthorizationMatrixEndpointsTests
             $"/api/clubs/{clubId}/posts/{missingPostId}/comments", HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task EventManagement_ShouldRefuseOutsidersBeforeRevealingEventState()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateSessionAsync(app, "authz-event-owner@example.com", "Organizer");
+        var outsider = await CreateSessionAsync(app, "authz-event-outsider@example.com", "Organizer");
+        var outsiderUser = (await app.FindUserByEmailAsync("authz-event-outsider@example.com"))!;
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Authz Event State Club");
+        var eventId = await CreatePublishedEventAsync(app, owner.AccessToken, clubId, "Authz Event State Event");
+
+        // Inviting to a public event is a 400 for its managers; an outsider is refused first, so
+        // the answer no longer reveals whether the event is private or published.
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Post, $"/api/events/{eventId}/invitations",
+            "Not allowed", new { userIds = new[] { outsiderUser.Id } });
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Get, $"/api/events/{eventId}/invitations", "Not allowed");
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Post, $"/api/events/{eventId}/publish", "Not allowed");
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Get, $"/api/events/clubs/{clubId}/series", "Not allowed");
+
+        // Missing resources keep their usual not-found answer.
+        await AssertStatusAsync(app, outsider.AccessToken, HttpMethod.Get, "/api/events/series/987654", HttpStatusCode.NotFound);
+        await AssertStatusAsync(app, outsider.AccessToken, HttpMethod.Get, "/api/events/987654/manage", HttpStatusCode.NotFound);
+        await AssertStatusAsync(app, owner.AccessToken, HttpMethod.Get, $"/api/events/{eventId}/manage", HttpStatusCode.OK);
+    }
+
     private static async Task AssertRefusedAsync(
         AuthApiTestApp app, string accessToken, HttpMethod method, string path, string message, object? body = null)
     {

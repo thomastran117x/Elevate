@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.events.invitations.contracts.requests;
 using backend.main.features.events.invitations.contracts.responses;
 using backend.main.shared.exceptions.http;
@@ -28,6 +29,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("{eventId}/invitations")]
+    [RequirePermission(PermissionNames.EventManage, "eventId")]
     [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventInvitationResponse>>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateInvitations(int eventId, [FromBody] CreateEventInvitationsRequest request)
     {
@@ -57,6 +59,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpGet("{eventId}/invitations")]
+    [RequirePermission(PermissionNames.EventManage, "eventId")]
     [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventInvitationResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetInvitations(int eventId)
     {
@@ -80,6 +83,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("{eventId}/invitations/{invitationId}/revoke")]
+    [RequirePermission(PermissionNames.EventManage, "eventId")]
     [ProducesResponseType(typeof(ApiResponse<EventInvitationResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RevokeInvitation(int eventId, int invitationId)
     {
@@ -103,6 +107,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("{eventId}/invitation-links")]
+    [RequirePermission(PermissionNames.EventManage, "eventId")]
     [ProducesResponseType(typeof(ApiResponse<EventInvitationLinkResponse>), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateInvitationLink(int eventId, [FromBody] CreateEventInvitationLinkRequest request)
     {
@@ -131,6 +136,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpGet("{eventId}/invitation-links")]
+    [RequirePermission(PermissionNames.EventManage, "eventId")]
     [ProducesResponseType(typeof(ApiResponse<IEnumerable<EventInvitationLinkResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetInvitationLinks(int eventId)
     {
@@ -154,6 +160,7 @@ public sealed class EventInvitationController : ControllerBase
 
     [Authorize]
     [HttpPost("{eventId}/invitation-links/{linkId}/revoke")]
+    [RequirePermission(PermissionNames.EventManage, "eventId")]
     [ProducesResponseType(typeof(ApiResponse<EventInvitationLinkResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RevokeInvitationLink(int eventId, int linkId)
     {

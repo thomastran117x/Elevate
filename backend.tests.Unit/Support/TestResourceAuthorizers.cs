@@ -1,5 +1,8 @@
 using backend.main.application.security.authorization;
 using backend.main.features.clubs.access;
+using backend.main.features.events.access;
+using backend.main.features.media;
+using backend.main.features.payment;
 using backend.main.infrastructure.database.core;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -12,8 +15,9 @@ namespace backend.tests.Unit.Support;
 internal static class TestResourceAuthorizers
 {
     /// <summary>
-    /// The real club, user and authored-content evaluators over a test database, for harnesses
-    /// that seed clubs, staff and members and want the production rules applied to them.
+    /// The real evaluators that read only the database (clubs, series, payments, media, users,
+    /// authored content), for harnesses that seed that state and want the production rules
+    /// applied to it. Event permissions also need the visibility checker and are not included.
     /// </summary>
     public static IResourceAuthorizer Over(AppDatabaseContext db)
     {
@@ -21,6 +25,9 @@ internal static class TestResourceAuthorizers
         services.AddSingleton(db);
         services.AddSingleton<ClubRelationshipResolver>();
         services.AddKeyedSingleton<IResourcePermissionEvaluator, ClubPermissionEvaluator>(ResourceKind.Club);
+        services.AddKeyedSingleton<IResourcePermissionEvaluator, EventSeriesPermissionEvaluator>(ResourceKind.EventSeries);
+        services.AddKeyedSingleton<IResourcePermissionEvaluator, PaymentPermissionEvaluator>(ResourceKind.Payment);
+        services.AddKeyedSingleton<IResourcePermissionEvaluator, MediaAssetPermissionEvaluator>(ResourceKind.MediaAsset);
         services.AddKeyedSingleton<IResourcePermissionEvaluator, UserPermissionEvaluator>(ResourceKind.User);
         services.AddKeyedSingleton<IResourcePermissionEvaluator, AuthoredContentPermissionEvaluator>(ResourceKind.AuthoredContent);
         return new ResourceAuthorizer(services.BuildServiceProvider());
