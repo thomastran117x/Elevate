@@ -1,7 +1,9 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.clubs.discussions.contracts.requests;
 using backend.main.features.clubs.discussions.contracts.responses;
+using backend.main.features.clubs.discussions.replies;
 using backend.main.features.profile.contracts;
 using backend.main.shared.responses;
 
@@ -30,6 +32,7 @@ namespace backend.main.features.clubs.discussions
 
         [Authorize]
         [HttpPost("{clubId}/discussions")]
+        [RequirePermission(PermissionNames.ClubContribute, "clubId", DenialMessage = ClubDiscussionService.ContributeForbiddenMessage)]
         [ProducesResponseType(typeof(ApiResponse<ClubDiscussionResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreateDiscussion(int clubId, [FromBody] ClubDiscussionCreateRequest request)
         {
@@ -54,6 +57,7 @@ namespace backend.main.features.clubs.discussions
 
         [AllowAnonymous]
         [HttpGet("{clubId}/discussions")]
+        [RequirePermission(PermissionNames.ClubRead, "clubId", DenialMessage = ClubDiscussionReplyService.ReadForbiddenMessage, AnonymousDenialMessage = ClubDiscussionReplyService.ReadAnonymousMessage)]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubDiscussionResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetDiscussionsByClub(
             int clubId,

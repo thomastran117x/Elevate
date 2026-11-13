@@ -1,5 +1,6 @@
 using backend.main.application.features;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.contracts.requests;
 using backend.main.features.clubs.posts.contracts.responses;
@@ -29,6 +30,7 @@ namespace backend.main.features.clubs.posts
 
         [Authorize]
         [HttpPost("{clubId}/posts")]
+        [RequirePermission(PermissionNames.ClubStaff, "clubId", DenialMessage = ClubPostService.CreateForbiddenMessage)]
         [ProducesResponseType(typeof(ApiResponse<ClubPostResponse>), StatusCodes.Status201Created)]
         public async Task<IActionResult> CreatePost(int clubId, [FromBody] ClubPostCreateRequest request)
         {
@@ -48,6 +50,7 @@ namespace backend.main.features.clubs.posts
 
         [AllowAnonymous]
         [HttpGet("{clubId}/posts/{id}")]
+        [RequirePermission(PermissionNames.ClubRead, "clubId", DenialMessage = ClubPostService.ReadForbiddenMessage, AnonymousDenialMessage = ClubPostService.ReadAnonymousMessage)]
         [ProducesResponseType(typeof(ApiResponse<ClubPostResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPost(int clubId, int id)
         {
@@ -70,6 +73,7 @@ namespace backend.main.features.clubs.posts
 
         [AllowAnonymous]
         [HttpGet("{clubId}/posts")]
+        [RequirePermission(PermissionNames.ClubRead, "clubId", DenialMessage = ClubPostService.ReadForbiddenMessage, AnonymousDenialMessage = ClubPostService.ReadAnonymousMessage)]
         [ProducesResponseType(typeof(ApiResponse<PagedResponse<ClubPostResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPosts(
             int clubId,
@@ -109,6 +113,7 @@ namespace backend.main.features.clubs.posts
 
         [Authorize]
         [HttpPut("{clubId}/posts/{id}")]
+        [RequirePermission(PermissionNames.ClubStaff, "clubId", DenialMessage = ClubPostService.UpdateForbiddenMessage)]
         [ProducesResponseType(typeof(ApiResponse<ClubPostResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdatePost(
             int clubId,
@@ -131,6 +136,7 @@ namespace backend.main.features.clubs.posts
 
         [Authorize]
         [HttpDelete("{clubId}/posts/{id}")]
+        [RequirePermission(PermissionNames.ClubStaff, "clubId", DenialMessage = ClubPostService.DeleteForbiddenMessage)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> DeletePost(int clubId, int id)
         {

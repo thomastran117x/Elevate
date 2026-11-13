@@ -1,4 +1,4 @@
-using backend.main.features.clubs.follow;
+using backend.main.application.security.authorization;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
@@ -9,34 +9,31 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
 {
     private readonly IClubDiscussionReplyRepository _replyRepository;
     private readonly IClubDiscussionRepository _discussionRepository;
-    private readonly IClubService _clubService;
-    private readonly IFollowRepository _followRepository;
+    private readonly IResourceAuthorizer _authorizer;
     private readonly IUserRepository _userRepository;
+
+    public const string ReadAnonymousMessage = "Authentication is required to view discussions for a private club.";
+    public const string ReadForbiddenMessage = "You must be a member of this club to view its discussions.";
+    public const string ParticipateForbiddenMessage = "You must be a member of this club to participate in its discussions.";
 
     public ClubDiscussionReplyService(
         IClubDiscussionReplyRepository replyRepository,
         IClubDiscussionRepository discussionRepository,
-        IClubService clubService,
-        IFollowRepository followRepository,
+        IResourceAuthorizer authorizer,
         IUserRepository userRepository)
     {
         _replyRepository = replyRepository;
         _discussionRepository = discussionRepository;
-        _clubService = clubService;
-        _followRepository = followRepository;
+        _authorizer = authorizer;
         _userRepository = userRepository;
     }
 
-    public async Task EnsureCanReadClubAsync(int clubId, int? userId, string? userRole)
-    {
-        var club = await _clubService.GetClub(clubId);
-        if (!club.isPrivate)
-            return;
-        if (!userId.HasValue)
-            throw new UnauthorizedException("Authentication is required to view discussions for a private club.");
-        if (!await IsMemberOrStaffAsync(clubId, userId.Value, userRole))
-            throw new ForbiddenException("You must be a member of this club to view its discussions.");
-    }
+    public Task EnsureCanReadClubAsync(int clubId, int? userId, string? userRole) =>
+        _authorizer.EnsureAsync(
+            new ResourceActor(userId, userRole),
+            Permissions.ClubRead,
+            new ClubResource(clubId),
+            new PermissionMessages(ReadForbiddenMessage, ReadAnonymousMessage));
 
     public async Task EnsureCanReadDiscussionAsync(
         int clubId, int discussionId, int? userId, string? userRole)
@@ -98,7 +95,7 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
         await EnsureCanParticipateAsync(clubId, userId, userRole);
         await GetDiscussionAsync(clubId, discussionId);
         var reply = await GetReplyAsync(discussionId, replyId);
-        EnsureAuthor(reply, userId, "update");
+        await EnsureAuthorAsync(reply, userId, "update");
         if (reply.IsDeleted)
             throw new BadRequestException("Deleted replies cannot be edited.");
 
@@ -113,7 +110,7 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
         await EnsureCanParticipateAsync(clubId, userId, userRole);
         await GetDiscussionAsync(clubId, discussionId);
         var reply = await GetReplyAsync(discussionId, replyId);
-        EnsureAuthor(reply, userId, "delete");
+        await EnsureAuthorAsync(reply, userId, "delete");
         var deleted = await _replyRepository.SoftDeleteAsync(replyId)
             ?? throw new ResourceNotFoundException($"Reply with ID {replyId} was not found.");
         return await BuildViewAsync(deleted, userId);
@@ -144,21 +141,12 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
         return await _replyRepository.ClearReactionAsync(replyId, userId);
     }
 
-    private async Task EnsureCanParticipateAsync(int clubId, int userId, string? userRole)
-    {
-        var club = await _clubService.GetClub(clubId);
-        if (!club.isPrivate)
-            return;
-        if (!await IsMemberOrStaffAsync(clubId, userId, userRole))
-            throw new ForbiddenException("You must be a member of this club to participate in its discussions.");
-    }
-
-    private async Task<bool> IsMemberOrStaffAsync(int clubId, int userId, string? userRole)
-    {
-        if (await _clubService.HasClubStaffAccessAsync(clubId, userId, userRole))
-            return true;
-        return await _followRepository.IsFollowingClubAsync(clubId, userId) is not null;
-    }
+    private Task EnsureCanParticipateAsync(int clubId, int userId, string? userRole) =>
+        _authorizer.EnsureAsync(
+            ResourceActor.User(userId, userRole),
+            Permissions.ClubParticipate,
+            new ClubResource(clubId),
+            new PermissionMessages(ParticipateForbiddenMessage));
 
     private async Task<ClubDiscussion> GetDiscussionAsync(int clubId, int discussionId)
     {
@@ -178,11 +166,12 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
         return reply;
     }
 
-    private static void EnsureAuthor(ClubDiscussionReply reply, int userId, string action)
-    {
-        if (reply.UserId != userId)
-            throw new ForbiddenException($"You are not allowed to {action} this reply.");
-    }
+    private Task EnsureAuthorAsync(ClubDiscussionReply reply, int userId, string action) =>
+        _authorizer.EnsureAsync(
+            ResourceActor.User(userId, null),
+            Permissions.ContentAuthor,
+            new AuthoredContentResource("Reply", reply.Id, reply.UserId),
+            new PermissionMessages($"You are not allowed to {action} this reply."));
 
     private static string NormalizeContent(string content)
     {

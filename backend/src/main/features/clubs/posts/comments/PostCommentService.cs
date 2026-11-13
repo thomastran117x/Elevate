@@ -1,4 +1,4 @@
-using backend.main.features.clubs.follow;
+using backend.main.application.security.authorization;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
@@ -9,34 +9,35 @@ public sealed class PostCommentService : IPostCommentService
 {
     private readonly IPostCommentRepository _commentRepository;
     private readonly IClubPostRepository _postRepository;
-    private readonly IClubService _clubService;
-    private readonly IFollowRepository _followRepository;
+    private readonly IResourceAuthorizer _authorizer;
     private readonly IUserRepository _userRepository;
+
+    public const string ReadAnonymousMessage = "Authentication is required to view comments for a private club.";
+    public const string ReadForbiddenMessage = "You must be a member of this club to view its comments.";
+    public const string ParticipateForbiddenMessage = "You must be a member of this club to participate in its comments.";
 
     public PostCommentService(
         IPostCommentRepository commentRepository,
         IClubPostRepository postRepository,
-        IClubService clubService,
-        IFollowRepository followRepository,
+        IResourceAuthorizer authorizer,
         IUserRepository userRepository)
     {
         _commentRepository = commentRepository;
         _postRepository = postRepository;
-        _clubService = clubService;
-        _followRepository = followRepository;
+        _authorizer = authorizer;
         _userRepository = userRepository;
     }
 
     public async Task EnsureCanReadPostAsync(int clubId, int postId, int? userId, string? userRole)
     {
-        var club = await _clubService.GetClub(clubId);
+        // The club's privacy is checked before the post is looked up, so the ids of a private
+        // club's posts cannot be probed through the not-found response.
+        await _authorizer.EnsureAsync(
+            new ResourceActor(userId, userRole),
+            Permissions.ClubRead,
+            new ClubResource(clubId),
+            new PermissionMessages(ReadForbiddenMessage, ReadAnonymousMessage));
         await GetPostAsync(clubId, postId);
-        if (!club.isPrivate)
-            return;
-        if (!userId.HasValue)
-            throw new UnauthorizedException("Authentication is required to view comments for a private club.");
-        if (!await IsMemberOrStaffAsync(clubId, userId.Value, userRole))
-            throw new ForbiddenException("You must be a member of this club to view its comments.");
     }
 
     public async Task<PostCommentPage> GetPageAsync(
@@ -89,7 +90,7 @@ public sealed class PostCommentService : IPostCommentService
     {
         await EnsureCanParticipateAsync(clubId, postId, userId, userRole);
         var comment = await GetCommentAsync(postId, commentId);
-        EnsureAuthor(comment, userId, "update");
+        await EnsureAuthorAsync(comment, userId, "update");
         if (comment.IsDeleted)
             throw new BadRequestException("Deleted comments cannot be edited.");
 
@@ -103,7 +104,7 @@ public sealed class PostCommentService : IPostCommentService
     {
         await EnsureCanParticipateAsync(clubId, postId, userId, userRole);
         var comment = await GetCommentAsync(postId, commentId);
-        EnsureAuthor(comment, userId, "delete");
+        await EnsureAuthorAsync(comment, userId, "delete");
         var deleted = await _commentRepository.SoftDeleteAsync(commentId)
             ?? throw new ResourceNotFoundException($"Comment with ID {commentId} was not found.");
         return await BuildViewAsync(deleted, userId);
@@ -134,19 +135,12 @@ public sealed class PostCommentService : IPostCommentService
 
     private async Task EnsureCanParticipateAsync(int clubId, int postId, int userId, string? userRole)
     {
-        var club = await _clubService.GetClub(clubId);
+        await _authorizer.EnsureAsync(
+            ResourceActor.User(userId, userRole),
+            Permissions.ClubParticipate,
+            new ClubResource(clubId),
+            new PermissionMessages(ParticipateForbiddenMessage));
         await GetPostAsync(clubId, postId);
-        if (!club.isPrivate)
-            return;
-        if (!await IsMemberOrStaffAsync(clubId, userId, userRole))
-            throw new ForbiddenException("You must be a member of this club to participate in its comments.");
-    }
-
-    private async Task<bool> IsMemberOrStaffAsync(int clubId, int userId, string? userRole)
-    {
-        if (await _clubService.HasClubStaffAccessAsync(clubId, userId, userRole))
-            return true;
-        return await _followRepository.IsFollowingClubAsync(clubId, userId) is not null;
     }
 
     private async Task<ClubPost> GetPostAsync(int clubId, int postId)
@@ -167,11 +161,12 @@ public sealed class PostCommentService : IPostCommentService
         return comment;
     }
 
-    private static void EnsureAuthor(PostComment comment, int userId, string action)
-    {
-        if (comment.UserId != userId)
-            throw new ForbiddenException($"You are not allowed to {action} this comment.");
-    }
+    private Task EnsureAuthorAsync(PostComment comment, int userId, string action) =>
+        _authorizer.EnsureAsync(
+            ResourceActor.User(userId, null),
+            Permissions.ContentAuthor,
+            new AuthoredContentResource("Comment", comment.Id, comment.UserId),
+            new PermissionMessages($"You are not allowed to {action} this comment."));
 
     private static string NormalizeContent(string content)
     {

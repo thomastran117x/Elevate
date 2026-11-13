@@ -5,6 +5,7 @@ using backend.main.features.clubs.search;
 using backend.main.features.profile;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -253,7 +254,8 @@ public class ClubReviewServiceTests
                 ClubRepositoryMock.Object,
                 UserRepositoryMock.Object,
                 OutboxWriterMock.Object,
-                CacheMock.Object);
+                CacheMock.Object,
+                TestResourceAuthorizers.Over(db));
         }
 
         public static async Task<ClubReviewServiceHarness> CreateAsync()

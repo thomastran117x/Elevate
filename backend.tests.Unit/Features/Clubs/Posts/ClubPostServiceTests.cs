@@ -12,6 +12,7 @@ using backend.main.infrastructure.database.core;
 using backend.main.infrastructure.elasticsearch;
 using backend.main.shared.exceptions.http;
 using backend.main.shared.responses;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -28,9 +29,7 @@ public class ClubPostServiceTests
     public async Task CreateAsync_ShouldThrow_WhenUserCannotManagePosts()
     {
         await using var harness = await ClubPostServiceHarness.CreateAsync();
-        harness.ClubServiceMock
-            .Setup(service => service.CanManageClubPostsAsync(harness.ClubId, harness.UserId, harness.UserRole))
-            .ReturnsAsync(false);
+        harness.Access.Revoke(harness.ClubId, harness.UserId);
 
         var action = () => harness.Service.CreateAsync(
             harness.ClubId,
@@ -97,12 +96,7 @@ public class ClubPostServiceTests
     public async Task GetByIdAsync_ShouldRequireMembership_WhenRequesterLacksPrivateClubAccess()
     {
         await using var harness = await ClubPostServiceHarness.CreateAsync(isPrivate: true);
-        harness.ClubServiceMock
-            .Setup(service => service.HasClubStaffAccessAsync(harness.ClubId, harness.UserId, harness.UserRole))
-            .ReturnsAsync(false);
-        harness.FollowRepositoryMock
-            .Setup(repo => repo.IsFollowingClubAsync(harness.ClubId, harness.UserId))
-            .ReturnsAsync((FollowClub?)null);
+        harness.Access.Revoke(harness.ClubId, harness.UserId);
 
         var action = () => harness.Service.GetByIdAsync(harness.ClubId, harness.PostId, harness.UserId, harness.UserRole);
 
@@ -295,9 +289,7 @@ public class ClubPostServiceTests
         harness.PostRepositoryMock
             .Setup(repo => repo.GetByIdAsync(harness.PostId))
             .ReturnsAsync(harness.BuildPost());
-        harness.ClubServiceMock
-            .Setup(service => service.CanManageClubPostsAsync(harness.ClubId, harness.UserId, harness.UserRole))
-            .ReturnsAsync(false);
+        harness.Access.Revoke(harness.ClubId, harness.UserId);
 
         var action = () => harness.Service.UpdateAsync(
             harness.ClubId,
@@ -352,9 +344,7 @@ public class ClubPostServiceTests
         harness.PostRepositoryMock
             .Setup(repo => repo.GetByIdAsync(harness.PostId))
             .ReturnsAsync(harness.BuildPost());
-        harness.ClubServiceMock
-            .Setup(service => service.CanManageClubPostsAsync(harness.ClubId, harness.UserId, harness.UserRole))
-            .ReturnsAsync(false);
+        harness.Access.Revoke(harness.ClubId, harness.UserId);
 
         var action = () => harness.Service.DeleteAsync(
             harness.ClubId,
@@ -463,8 +453,7 @@ public class ClubPostServiceTests
         public AppDatabaseContext Db { get; }
         public Mock<IClubPostRepository> PostRepositoryMock { get; } = new();
         public Mock<IPostCommentRepository> CommentRepositoryMock { get; } = new();
-        public Mock<IClubService> ClubServiceMock { get; } = new();
-        public Mock<IFollowRepository> FollowRepositoryMock { get; } = new();
+        public FakeClubAuthorizer Access { get; } = new();
         public Mock<IClubPostSearchService> SearchServiceMock { get; } = new();
         public Mock<IClubPostSearchOutboxWriter> OutboxWriterMock { get; } = new();
         public Mock<IUserRepository> UserRepositoryMock { get; } = new();
@@ -493,19 +482,11 @@ public class ClubPostServiceTests
                 Usertype = "Participant"
             };
 
-            ClubServiceMock
-                .Setup(service => service.GetClub(ClubId))
-                .ReturnsAsync(club);
-            ClubServiceMock
-                .Setup(service => service.CanManageClubPostsAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>()))
-                .ReturnsAsync(true);
-            ClubServiceMock
-                .Setup(service => service.HasClubStaffAccessAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>()))
-                .ReturnsAsync(false);
-
-            FollowRepositoryMock
-                .Setup(repo => repo.IsFollowingClubAsync(It.IsAny<int>(), It.IsAny<int>()))
-                .ReturnsAsync(new FollowClub { ClubId = ClubId, UserId = UserId });
+            // The requesting user may manage posts (staff) and reads as a member. Ownership is
+            // left out so a test can take those roles away with Access.Revoke.
+            Access.Club(club.Id, club.isPrivate)
+                .Volunteer(ClubId, UserId)
+                .Member(ClubId, UserId);
 
             CacheMock
                 .Setup(cache => cache.GetOrSetAsync(
@@ -533,8 +514,7 @@ public class ClubPostServiceTests
                 db,
                 PostRepositoryMock.Object,
                 CommentRepositoryMock.Object,
-                ClubServiceMock.Object,
-                FollowRepositoryMock.Object,
+                Access,
                 SearchServiceMock.Object,
                 OutboxWriterMock.Object,
                 UserRepositoryMock.Object,

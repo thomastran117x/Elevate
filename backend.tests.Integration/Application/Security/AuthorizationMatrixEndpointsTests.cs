@@ -296,6 +296,39 @@ public class AuthorizationMatrixEndpointsTests
         await AssertRefusedAsync(app, managerB.AccessToken, HttpMethod.Get, $"/api/events/clubs/{clubB}/manage", "Not allowed");
     }
 
+    [Fact]
+    public async Task PrivateClubContent_ShouldBeRefusedBeforeChildResourcesAreLookedUp()
+    {
+        await using var app = await AuthApiTestApp.CreateAsync();
+        var owner = await CreateSessionAsync(app, "authz-content-owner@example.com", "Organizer");
+        var outsider = await CreateSessionAsync(app, "authz-content-outsider@example.com", "Participant");
+        var clubId = await CreateClubAsync(app, owner.AccessToken, "Authz Private Content Club", isPrivate: true);
+        const int missingPostId = 987_654;
+
+        // A post that does not exist answers a non-member exactly like one that does, so a private
+        // club's post ids cannot be probed. Anonymous readers are challenged with the 401 message.
+        var anonymous = await app.Client.GetAsync($"/api/clubs/{clubId}/posts/{missingPostId}/comments");
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized, await app.DescribeFailureAsync(anonymous));
+        await AssertEnvelopeAsync(anonymous, "UNAUTHORIZED", "Authentication is required to view comments for a private club.");
+
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Get,
+            $"/api/clubs/{clubId}/posts/{missingPostId}/comments",
+            "You must be a member of this club to view its comments.");
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Get,
+            $"/api/clubs/{clubId}/posts/{missingPostId}",
+            "You must be a member of this club to view its posts.");
+
+        // Staff-only post writes refuse non-staff before the post is loaded.
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Post, $"/api/clubs/{clubId}/posts",
+            "You are not allowed to create posts for this club.", new { title = "Hi", content = "Body" });
+        await AssertRefusedAsync(app, outsider.AccessToken, HttpMethod.Put, $"/api/clubs/{clubId}/posts/{missingPostId}",
+            "You are not allowed to update this post.", new { title = "Hi", content = "Body" });
+
+        // The owner passes the gate and gets the post's own not-found answer.
+        await AssertStatusAsync(app, owner.AccessToken, HttpMethod.Get,
+            $"/api/clubs/{clubId}/posts/{missingPostId}/comments", HttpStatusCode.NotFound);
+    }
+
     private static async Task AssertRefusedAsync(
         AuthApiTestApp app, string accessToken, HttpMethod method, string path, string message, object? body = null)
     {
@@ -369,7 +402,7 @@ public class AuthorizationMatrixEndpointsTests
         return await app.LoginApiAsync(user.Username!, trustedDeviceToken: device);
     }
 
-    private static async Task<int> CreateClubAsync(AuthApiTestApp app, string accessToken, string name)
+    private static async Task<int> CreateClubAsync(AuthApiTestApp app, string accessToken, string name, bool isPrivate = false)
     {
         var response = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Post,
@@ -381,7 +414,8 @@ public class AuthorizationMatrixEndpointsTests
                 Description = "Authorization matrix club",
                 Clubtype = "social",
                 ClubImageUrl = await app.CreateClubImageUrlAsync(accessToken),
-                Email = $"{name.Replace(" ", "-", StringComparison.Ordinal).ToLowerInvariant()}@example.com"
+                Email = $"{name.Replace(" ", "-", StringComparison.Ordinal).ToLowerInvariant()}@example.com",
+                IsPrivate = isPrivate
             })));
         response.StatusCode.Should().Be(HttpStatusCode.Created, await app.DescribeFailureAsync(response));
         await app.ReindexClubsAsync();

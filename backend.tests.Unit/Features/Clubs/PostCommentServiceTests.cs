@@ -1,9 +1,8 @@
-using backend.main.features.clubs;
-using backend.main.features.clubs.follow;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.profile;
 using backend.main.shared.exceptions.http;
+using backend.tests.Unit.Support;
 
 using FluentAssertions;
 
@@ -25,25 +24,47 @@ public class PostCommentServiceTests
             harness.ClubId, harness.PostId, null, harness.UserId, "Participant", "  Hello  ");
 
         created.Comment.Content.Should().Be("Hello");
-        harness.Follows.Verify(
-            repository => repository.IsFollowingClubAsync(It.IsAny<int>(), It.IsAny<int>()),
-            Times.Never);
     }
 
     [Fact]
     public async Task CreateAsync_ShouldRejectAPrivateClubOutsider()
     {
         var harness = new Harness(isPrivate: true);
-        harness.Clubs.Setup(service => service.HasClubStaffAccessAsync(
-            harness.ClubId, harness.UserId, It.IsAny<string?>())).ReturnsAsync(false);
-        harness.Follows.Setup(repository => repository.IsFollowingClubAsync(
-            harness.ClubId, harness.UserId)).ReturnsAsync((FollowClub?)null);
 
         var act = () => harness.Service.CreateAsync(
             harness.ClubId, harness.PostId, null, harness.UserId, "Participant", "Hello");
 
         await act.Should().ThrowAsync<ForbiddenException>()
             .WithMessage("You must be a member of this club to participate in its comments.");
+    }
+
+    [Fact]
+    public async Task EnsureCanReadPostAsync_ShouldCheckPrivacyBeforeLookingUpThePost()
+    {
+        // A missing post and an existing one answer an outsider the same way, so a private
+        // club's post ids cannot be probed.
+        var harness = new Harness(isPrivate: true);
+
+        var missing = () => harness.Service.EnsureCanReadPostAsync(harness.ClubId, 999, harness.UserId, "Participant");
+        var existing = () => harness.Service.EnsureCanReadPostAsync(harness.ClubId, harness.PostId, harness.UserId, "Participant");
+        var anonymous = () => harness.Service.EnsureCanReadPostAsync(harness.ClubId, 999, null, null);
+
+        await missing.Should().ThrowAsync<ForbiddenException>()
+            .WithMessage(PostCommentService.ReadForbiddenMessage);
+        await existing.Should().ThrowAsync<ForbiddenException>()
+            .WithMessage(PostCommentService.ReadForbiddenMessage);
+        await anonymous.Should().ThrowAsync<UnauthorizedException>()
+            .WithMessage(PostCommentService.ReadAnonymousMessage);
+        harness.Posts.Verify(repository => repository.GetByIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task EnsureCanReadPostAsync_ShouldLetAMemberReadAPrivateClub()
+    {
+        var harness = new Harness(isPrivate: true);
+        harness.Access.Member(harness.ClubId, harness.UserId);
+
+        await harness.Service.EnsureCanReadPostAsync(harness.ClubId, harness.PostId, harness.UserId, "Participant");
     }
 
     [Fact]
@@ -110,8 +131,7 @@ public class PostCommentServiceTests
     {
         public Mock<IPostCommentRepository> Comments { get; } = new();
         public Mock<IClubPostRepository> Posts { get; } = new();
-        public Mock<IClubService> Clubs { get; } = new();
-        public Mock<IFollowRepository> Follows { get; } = new();
+        public FakeClubAuthorizer Access { get; } = new();
         public Mock<IUserRepository> Users { get; } = new();
         public PostCommentService Service { get; }
         public int ClubId => 7;
@@ -120,16 +140,7 @@ public class PostCommentServiceTests
 
         public Harness(bool isPrivate, int? postClubId = null)
         {
-            Clubs.Setup(service => service.GetClub(ClubId)).ReturnsAsync(new Club
-            {
-                Id = ClubId,
-                UserId = 1,
-                Name = "Club",
-                Description = "Description",
-                Clubtype = ClubType.Gaming,
-                ClubImage = "image.png",
-                isPrivate = isPrivate
-            });
+            Access.Club(ClubId, isPrivate, ownerId: 1);
             Posts.Setup(repository => repository.GetByIdAsync(PostId)).ReturnsAsync(new ClubPost
             {
                 Id = PostId,
@@ -139,7 +150,7 @@ public class PostCommentServiceTests
                 Content = "Body"
             });
             Service = new PostCommentService(
-                Comments.Object, Posts.Object, Clubs.Object, Follows.Object, Users.Object);
+                Comments.Object, Posts.Object, Access, Users.Object);
         }
 
         public void SetupEmptyViewData(int commentId)

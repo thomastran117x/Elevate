@@ -1,4 +1,5 @@
-using backend.main.features.clubs.follow;
+using backend.main.application.security.authorization;
+using backend.main.features.clubs.discussions.replies;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
@@ -8,28 +9,30 @@ namespace backend.main.features.clubs.discussions
     public class ClubDiscussionService : IClubDiscussionService
     {
         private readonly IClubDiscussionRepository _discussionRepository;
-        private readonly IClubService _clubService;
-        private readonly IFollowRepository _followRepository;
+        private readonly IResourceAuthorizer _authorizer;
         private readonly IUserRepository _userRepository;
+
+        public const string ContributeForbiddenMessage = "You must be a member of this club to start a discussion.";
 
         public ClubDiscussionService(
             IClubDiscussionRepository discussionRepository,
-            IClubService clubService,
-            IFollowRepository followRepository,
+            IResourceAuthorizer authorizer,
             IUserRepository userRepository)
         {
             _discussionRepository = discussionRepository;
-            _clubService = clubService;
-            _followRepository = followRepository;
+            _authorizer = authorizer;
             _userRepository = userRepository;
         }
 
         public async Task<ClubDiscussion> CreateAsync(int clubId, int userId, string? userRole, string title, string description)
         {
-            // Throws ResourceNotFoundException when the club does not exist.
-            await _clubService.GetClub(clubId);
-
-            await EnsureCanWriteAsync(clubId, userId, userRole);
+            // Authoring needs membership in public and private clubs alike, unlike reading.
+            // A missing club is reported as not found.
+            await _authorizer.EnsureAsync(
+                ResourceActor.User(userId, userRole),
+                Permissions.ClubContribute,
+                new ClubResource(clubId),
+                new PermissionMessages(ContributeForbiddenMessage));
 
             var discussion = new ClubDiscussion
             {
@@ -45,9 +48,13 @@ namespace backend.main.features.clubs.discussions
         public async Task<(IReadOnlyList<ClubDiscussion> Discussions, IReadOnlyDictionary<int, UserListRecord> Authors, int TotalCount)>
             GetByClubIdAsync(int clubId, int? requestingUserId, string? requestingUserRole, int page, int pageSize)
         {
-            var club = await _clubService.GetClub(clubId);
-
-            await EnsureCanReadAsync(club, requestingUserId, requestingUserRole);
+            await _authorizer.EnsureAsync(
+                new ResourceActor(requestingUserId, requestingUserRole),
+                Permissions.ClubRead,
+                new ClubResource(clubId),
+                new PermissionMessages(
+                    ClubDiscussionReplyService.ReadForbiddenMessage,
+                    ClubDiscussionReplyService.ReadAnonymousMessage));
 
             var discussions = await _discussionRepository.GetByClubIdAsync(clubId, page, pageSize);
             var totalCount = await _discussionRepository.CountByClubIdAsync(clubId);
@@ -69,8 +76,7 @@ namespace backend.main.features.clubs.discussions
             if (discussion.ClubId != clubId)
                 throw new ResourceNotFoundException($"Discussion with ID {discussionId} was not found.");
 
-            if (discussion.UserId != userId)
-                throw new ForbiddenException("You are not allowed to update this discussion.");
+            await EnsureAuthorAsync(discussion, userId, "update");
 
             return await _discussionRepository.UpdateAsync(discussionId, new ClubDiscussion
             {
@@ -87,47 +93,16 @@ namespace backend.main.features.clubs.discussions
             if (discussion.ClubId != clubId)
                 throw new ResourceNotFoundException($"Discussion with ID {discussionId} was not found.");
 
-            if (discussion.UserId != userId)
-                throw new ForbiddenException("You are not allowed to delete this discussion.");
+            await EnsureAuthorAsync(discussion, userId, "delete");
 
             await _discussionRepository.DeleteAsync(discussionId);
         }
 
-        /// <summary>
-        /// Public clubs are readable by anyone. Private clubs are readable only by members and staff.
-        /// </summary>
-        private async Task EnsureCanReadAsync(Club club, int? userId, string? userRole)
-        {
-            if (!club.isPrivate)
-                return;
-
-            if (userId == null)
-                throw new UnauthorizedException("Authentication is required to view discussions for a private club.");
-
-            if (await IsMemberOrStaffAsync(club.Id, userId.Value, userRole))
-                return;
-
-            throw new ForbiddenException("You must be a member of this club to view its discussions.");
-        }
-
-        /// <summary>
-        /// Authoring is gated on membership for public and private clubs alike — unlike reading,
-        /// a public club still requires the author to have joined.
-        /// </summary>
-        private async Task EnsureCanWriteAsync(int clubId, int userId, string? userRole)
-        {
-            if (await IsMemberOrStaffAsync(clubId, userId, userRole))
-                return;
-
-            throw new ForbiddenException("You must be a member of this club to start a discussion.");
-        }
-
-        private async Task<bool> IsMemberOrStaffAsync(int clubId, int userId, string? userRole)
-        {
-            if (await _clubService.HasClubStaffAccessAsync(clubId, userId, userRole))
-                return true;
-
-            return await _followRepository.IsFollowingClubAsync(clubId, userId) != null;
-        }
+        private Task EnsureAuthorAsync(ClubDiscussion discussion, int userId, string action) =>
+            _authorizer.EnsureAsync(
+                ResourceActor.User(userId, null),
+                Permissions.ContentAuthor,
+                new AuthoredContentResource("Discussion", discussion.Id, discussion.UserId),
+                new PermissionMessages($"You are not allowed to {action} this discussion."));
     }
 }
