@@ -470,6 +470,21 @@ describe('ThreadComponent', () => {
 
     expect(node.isDeleted).toBeTrue();
     expect(node.deleteConfirm).toBeFalse();
+    expect(source.remove).toHaveBeenCalledWith(1, undefined);
+  });
+
+  it('sends a moderator’s reason with the removal', () => {
+    source.list.and.returnValue(of(makePage([makeItem({ id: 1 })])));
+    component.ngOnInit();
+    const node = component.roots[0];
+    source.remove.and.returnValue(
+      of(makeItem({ id: 1, isDeleted: true, content: null, author: null })),
+    );
+
+    component.handleNodeAction({ type: 'delete', node, reason: 'Spam' });
+
+    expect(source.remove).toHaveBeenCalledWith(1, 'Spam');
+    expect(node.isDeleted).toBeTrue();
   });
 
   it('applies a reaction optimistically and keeps the server totals', () => {

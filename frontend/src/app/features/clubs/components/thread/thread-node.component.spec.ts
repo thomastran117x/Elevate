@@ -262,6 +262,57 @@ describe('ThreadNodeComponent', () => {
     expect(component.authorName).toBe('Reply deleted');
   });
 
+  describe('moderation', () => {
+    beforeEach(() => {
+      component.node = makeNode({ userId: 99 });
+    });
+
+    it('offers removal to moderators on someone else’s live message only', () => {
+      expect(component.canRemoveAsModerator).toBeFalse();
+
+      component.canModerate = true;
+      expect(component.canRemoveAsModerator).toBeTrue();
+
+      component.node = makeNode({ userId: 99, isDeleted: true });
+      expect(component.canRemoveAsModerator).toBeFalse();
+
+      component.node = makeNode({ userId: 7 });
+      expect(component.canRemoveAsModerator).toBeFalse();
+    });
+
+    it('requires a reason before removing someone else’s message', () => {
+      component.canModerate = true;
+      component.node.deleteConfirm = true;
+
+      component.removalReason = '   ';
+      component.confirmDelete();
+      expect(emitted).toEqual([]);
+
+      component.removalReason = ' Spam ';
+      component.confirmDelete();
+      expect(emitted).toEqual([{ type: 'delete', node: component.node, reason: 'Spam' }]);
+      expect(component.removalReason).toBe('');
+    });
+
+    it('deletes the viewer’s own message without a reason', () => {
+      component.node = makeNode({ userId: 7 });
+
+      component.confirmDelete();
+
+      expect(emitted).toEqual([{ type: 'delete', node: component.node }]);
+    });
+
+    it('closes the confirmation and forgets the draft reason on cancel', () => {
+      component.node.deleteConfirm = true;
+      component.removalReason = 'Draft';
+
+      component.cancelDelete();
+
+      expect(component.node.deleteConfirm).toBeFalse();
+      expect(component.removalReason).toBe('');
+    });
+  });
+
   it('formats both the relative and the exact timestamp', () => {
     expect(component.formatDate('2026-08-15T12:00:00Z')).not.toBe('');
     expect(component.exactDate('2026-08-15T12:00:00Z')).not.toBe('');

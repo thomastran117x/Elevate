@@ -1,5 +1,6 @@
 using backend.main.features.cache;
 using backend.main.features.clubs;
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.reviews;
 using backend.main.features.clubs.search;
 using backend.main.features.profile;
@@ -167,25 +168,93 @@ public class ClubReviewServiceTests
     }
 
     [Fact]
-    public async Task DeleteReviewAsync_ShouldThrow_WhenReviewBelongsToAnotherUser()
+    public async Task DeleteReviewAsync_ShouldThrow_WhenANonStaffCallerDeletesSomeoneElsesReview()
     {
         await using var harness = await ClubReviewServiceHarness.CreateAsync();
+        await harness.SeedClubAsync();
         harness.ReviewRepositoryMock
             .Setup(repo => repo.GetByIdAsync(32))
             .ReturnsAsync(new ClubReview
             {
                 Id = 32,
                 ClubId = harness.ClubId,
-                UserId = harness.OtherUserId,
+                UserId = harness.UserId,
                 Title = "Existing",
                 Rating = 3
             });
 
-        var action = () => harness.Service.DeleteReviewAsync(harness.ClubId, 32, harness.UserId);
+        var action = () => harness.Service.DeleteReviewAsync(harness.ClubId, 32, harness.OtherUserId, "Participant", "Spam");
 
         await action.Should()
             .ThrowAsync<ForbiddenException>()
             .WithMessage("You are not allowed to delete this review.");
+        harness.ReviewRepositoryMock.Verify(repo => repo.DeleteAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteReviewAsync_ShouldRequireAReason_WhenTheOwnerRemovesSomeoneElsesReview()
+    {
+        await using var harness = await ClubReviewServiceHarness.CreateAsync();
+        await harness.SeedClubAsync();
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(34))
+            .ReturnsAsync(new ClubReview { Id = 34, ClubId = harness.ClubId, UserId = harness.OtherUserId, Title = "Rant" });
+
+        var action = () => harness.Service.DeleteReviewAsync(harness.ClubId, 34, harness.UserId, "Organizer");
+
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage(ClubModeration.ReasonRequiredMessage);
+        harness.ReviewRepositoryMock.Verify(repo => repo.DeleteAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteReviewAsync_ShouldRecordTheRemoval_WhenTheOwnerRemovesSomeoneElsesReview()
+    {
+        await using var harness = await ClubReviewServiceHarness.CreateAsync();
+        await harness.SeedClubAsync();
+        harness.SetupClubPartialUpdates();
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(35))
+            .ReturnsAsync(new ClubReview { Id = 35, ClubId = harness.ClubId, UserId = harness.OtherUserId, Title = "Rant", Rating = 1 });
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.DeleteAsync(35))
+            .ReturnsAsync(true);
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.GetAverageRatingAsync(harness.ClubId))
+            .ReturnsAsync(4.0);
+
+        await harness.Service.DeleteReviewAsync(harness.ClubId, 35, harness.UserId, "Organizer", "Abusive language");
+
+        var entry = await harness.Db.ClubModerationActions.SingleAsync();
+        entry.ActorUserId.Should().Be(harness.UserId);
+        entry.ActorClubRole.Should().Be(ClubModerationRoles.Owner);
+        entry.Action.Should().Be(ClubModerationActionTypes.Remove);
+        entry.ContentType.Should().Be(ClubModerationContentTypes.Review);
+        entry.ContentId.Should().Be(35);
+        entry.AuthorUserId.Should().Be(harness.OtherUserId);
+        entry.ContentSnapshot.Should().Be("Rant");
+        entry.Reason.Should().Be("Abusive language");
+    }
+
+    [Fact]
+    public async Task DeleteReviewAsync_ShouldLetAnAdminRemoveTheOwnersReview()
+    {
+        await using var harness = await ClubReviewServiceHarness.CreateAsync();
+        await harness.SeedClubAsync();
+        harness.SetupClubPartialUpdates();
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(36))
+            .ReturnsAsync(new ClubReview { Id = 36, ClubId = harness.ClubId, UserId = harness.UserId, Title = "Self praise" });
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.DeleteAsync(36))
+            .ReturnsAsync(true);
+
+        await harness.Service.DeleteReviewAsync(harness.ClubId, 36, harness.OtherUserId, "Admin", "Owner reviewing own club");
+
+        harness.ReviewRepositoryMock.Verify(repo => repo.DeleteAsync(36), Times.Once);
+        var entry = await harness.Db.ClubModerationActions.SingleAsync();
+        entry.ActorClubRole.Should().Be(ClubModerationRoles.Admin);
     }
 
     [Fact]
@@ -212,10 +281,11 @@ public class ClubReviewServiceTests
             .Setup(repo => repo.GetAverageRatingAsync(harness.ClubId))
             .ReturnsAsync((double?)null);
 
-        await harness.Service.DeleteReviewAsync(harness.ClubId, 33, harness.UserId);
+        await harness.Service.DeleteReviewAsync(harness.ClubId, 33, harness.UserId, "Organizer");
 
         var club = await harness.Db.Clubs.SingleAsync(item => item.Id == harness.ClubId);
         club.Rating.Should().BeNull();
+        (await harness.Db.ClubModerationActions.AnyAsync()).Should().BeFalse("authors deleting their own review are not moderating");
         harness.CacheMock.Verify(cache => cache.DeleteKeyAsync($"club:{harness.ClubId}"), Times.Once);
         harness.CacheMock.Verify(cache => cache.IncrementAsync("clubs:version", 1), Times.Once);
     }
@@ -240,6 +310,7 @@ public class ClubReviewServiceTests
         {
             _connection = connection;
             Db = db;
+            var authorizer = TestResourceAuthorizers.Over(db);
 
             CacheMock
                 .Setup(cache => cache.DeleteKeyAsync(It.IsAny<string>()))
@@ -255,7 +326,8 @@ public class ClubReviewServiceTests
                 UserRepositoryMock.Object,
                 OutboxWriterMock.Object,
                 CacheMock.Object,
-                TestResourceAuthorizers.Over(db));
+                authorizer,
+                new ClubModerationLog(db, authorizer));
         }
 
         public static async Task<ClubReviewServiceHarness> CreateAsync()

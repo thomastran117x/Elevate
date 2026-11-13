@@ -60,4 +60,17 @@ describe('DiscussionRepliesService', () => {
     expect(clear.request.method).toBe('DELETE');
     clear.flush(envelope({ replyId: 5, dislikeCount: 0, currentUserReaction: null }));
   });
+
+  it('deletes a reply, with a moderation reason when one is given', () => {
+    service.deleteReply(3, 7, 5).subscribe();
+    const own = httpMock.expectOne(`${base}/5`);
+    expect(own.request.method).toBe('DELETE');
+    expect(own.request.params.has('reason')).toBeFalse();
+    own.flush(envelope({ id: 5, isDeleted: true }));
+
+    service.deleteReply(3, 7, 5, 'Spam').subscribe();
+    const moderated = httpMock.expectOne((req) => req.url === `${base}/5`);
+    expect(moderated.request.params.get('reason')).toBe('Spam');
+    moderated.flush(envelope({ id: 5, isDeleted: true }));
+  });
 });

@@ -123,7 +123,8 @@ namespace backend.main.features.clubs.posts
             var userPayload = User.GetUserPayload();
 
             ClubPost post = await _postService.UpdateAsync(
-                clubId, id, userPayload.Id, userPayload.Role, request.Title, request.Content, request.PostType, request.IsPinned);
+                clubId, id, userPayload.Id, userPayload.Role, request.Title, request.Content, request.PostType, request.IsPinned,
+                request.ModerationReason);
 
             return StatusCode(
                 200,
@@ -138,11 +139,11 @@ namespace backend.main.features.clubs.posts
         [HttpDelete("{clubId}/posts/{id}")]
         [RequirePermission(PermissionNames.ClubStaff, "clubId", DenialMessage = ClubPostService.DeleteForbiddenMessage)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> DeletePost(int clubId, int id)
+        public async Task<IActionResult> DeletePost(int clubId, int id, [FromQuery] string? reason = null)
         {
             var userPayload = User.GetUserPayload();
 
-            await _postService.DeleteAsync(clubId, id, userPayload.Id, userPayload.Role);
+            await _postService.DeleteAsync(clubId, id, userPayload.Id, userPayload.Role, reason);
 
             return StatusCode(
                 200,

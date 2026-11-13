@@ -96,10 +96,11 @@ public sealed class ClubDiscussionReplyController : ControllerBase
     [HttpDelete("{clubId}/discussions/{discussionId}/replies/{replyId}")]
     [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = ClubDiscussionReplyService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<DiscussionReplyResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> DeleteReply(int clubId, int discussionId, int replyId)
+    public async Task<IActionResult> DeleteReply(
+        int clubId, int discussionId, int replyId, [FromQuery] string? reason = null)
     {
         var user = User.GetUserPayload();
-        var view = await _replyService.DeleteAsync(clubId, discussionId, replyId, user.Id, user.Role);
+        var view = await _replyService.DeleteAsync(clubId, discussionId, replyId, user.Id, user.Role, reason);
         var response = MapReply(view);
         await _notifier.ReplyDeletedAsync(clubId, response);
         return Ok(new ApiResponse<DiscussionReplyResponse>("Reply deleted successfully.", response));

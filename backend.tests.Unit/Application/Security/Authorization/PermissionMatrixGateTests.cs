@@ -76,7 +76,7 @@ public class PermissionMatrixGateTests
             {
                 if (!Permissions.TryGet(declaration.PermissionName, out var permission))
                     problems.Add($"{endpoint.Key}: unknown permission {declaration.PermissionName}");
-                else if (permission.Resource == ResourceKind.AuthoredContent)
+                else if (permission.Resource is ResourceKind.AuthoredContent or ResourceKind.ClubContent)
                     problems.Add($"{endpoint.Key}: {permission.Name} is checked in the service, not at the edge");
                 if (!parameters.Contains(declaration.ResourceParameter))
                     problems.Add($"{endpoint.Key}: no parameter named {declaration.ResourceParameter}");

@@ -1,4 +1,5 @@
 using backend.main.application.security.authorization;
+using backend.main.features.clubs.moderation;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
@@ -11,6 +12,7 @@ public sealed class PostCommentService : IPostCommentService
     private readonly IClubPostRepository _postRepository;
     private readonly IResourceAuthorizer _authorizer;
     private readonly IUserRepository _userRepository;
+    private readonly IClubModerationLog _moderationLog;
 
     public const string ReadAnonymousMessage = "Authentication is required to view comments for a private club.";
     public const string ReadForbiddenMessage = "You must be a member of this club to view its comments.";
@@ -20,12 +22,14 @@ public sealed class PostCommentService : IPostCommentService
         IPostCommentRepository commentRepository,
         IClubPostRepository postRepository,
         IResourceAuthorizer authorizer,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IClubModerationLog moderationLog)
     {
         _commentRepository = commentRepository;
         _postRepository = postRepository;
         _authorizer = authorizer;
         _userRepository = userRepository;
+        _moderationLog = moderationLog;
     }
 
     public async Task EnsureCanReadPostAsync(int clubId, int postId, int? userId, string? userRole)
@@ -100,11 +104,28 @@ public sealed class PostCommentService : IPostCommentService
     }
 
     public async Task<PostCommentView> DeleteAsync(
-        int clubId, int postId, int commentId, int userId, string? userRole)
+        int clubId, int postId, int commentId, int userId, string? userRole, string? reason = null)
     {
         await EnsureCanParticipateAsync(clubId, postId, userId, userRole);
         var comment = await GetCommentAsync(postId, commentId);
-        await EnsureAuthorAsync(comment, userId, "delete");
+
+        // The author, staff who outrank the author in this club, or an admin.
+        var resource = new ClubContentResource(clubId, ClubModerationContentTypes.Comment, comment.Id, comment.UserId);
+        var decision = await _authorizer.AuthorizeContentAsync(
+            ResourceActor.User(userId, userRole),
+            Permissions.ContentRemove,
+            resource,
+            new PermissionMessages("You are not allowed to delete this comment."));
+
+        // Deleting an already deleted comment changes nothing, so there is nothing to record.
+        if (decision.IsModeration && !comment.IsDeleted)
+        {
+            var moderationReason = ClubModeration.RequireReason(reason);
+            // Staged before the soft delete so it commits in the repository's transaction.
+            _moderationLog.Stage(ClubModeration.Entry(
+                resource, userId, decision, ClubModerationActionTypes.Remove, comment.Content, moderationReason));
+        }
+
         var deleted = await _commentRepository.SoftDeleteAsync(commentId)
             ?? throw new ResourceNotFoundException($"Comment with ID {commentId} was not found.");
         return await BuildViewAsync(deleted, userId);

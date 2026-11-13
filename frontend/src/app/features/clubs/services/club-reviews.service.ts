@@ -67,9 +67,15 @@ export class ClubReviewsService {
       .pipe(map((response) => this.mapReview(response)));
   }
 
-  deleteReview(clubId: number, reviewId: number): Observable<ApiEnvelope<unknown>> {
+  /** `reason` is required by the server when the caller is removing someone else's review. */
+  deleteReview(
+    clubId: number,
+    reviewId: number,
+    reason?: string,
+  ): Observable<ApiEnvelope<unknown>> {
     return this.api.delete<ApiEnvelope<unknown>>(`${this.base}/${clubId}/reviews/${reviewId}`, {
       withCredentials: true,
+      ...(reason ? { params: { reason } } : {}),
     });
   }
 

@@ -29,6 +29,8 @@ export class ThreadNodeComponent {
   @Input({ required: true }) node!: ThreadDisplayNode;
   @Input({ required: true }) labels!: ThreadLabels;
   @Input() currentUser: User | null = null;
+  /** The viewer is club staff or an admin and may remove other people's messages. */
+  @Input() canModerate = false;
   @Input() depth = 0;
   /** Continues the previous author's run: avatar and header are suppressed. */
   @Input() grouped = false;
@@ -44,8 +46,32 @@ export class ThreadNodeComponent {
     return this.depth < ThreadNodeComponent.MaxIndentDepth ? 12 : 0;
   }
 
+  /** Why a moderator is removing this message; required before the removal is sent. */
+  removalReason = '';
+
   get isOwn(): boolean {
     return !!this.currentUser && this.node.userId === this.currentUser.Id;
+  }
+
+  /** A moderator may remove someone else's message, giving a reason. */
+  get canRemoveAsModerator(): boolean {
+    return this.canModerate && !!this.currentUser && !this.isOwn && !this.node.isDeleted;
+  }
+
+  confirmDelete(): void {
+    if (this.isOwn) {
+      this.action.emit({ type: 'delete', node: this.node });
+      return;
+    }
+    const reason = this.removalReason.trim();
+    if (!reason) return;
+    this.action.emit({ type: 'delete', node: this.node, reason });
+    this.removalReason = '';
+  }
+
+  cancelDelete(): void {
+    this.node.deleteConfirm = false;
+    this.removalReason = '';
   }
 
   get authorName(): string {

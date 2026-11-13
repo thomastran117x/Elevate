@@ -5,6 +5,8 @@ import { Subject, takeUntil } from 'rxjs';
 import { Store } from '@ngrx/store';
 
 import { ClubPostsService } from '../../services/club-posts.service';
+import { ClubsService } from '../../services/clubs.service';
+import { isClubStaff } from '../../models/club.types';
 import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
 import { ThreadComponent } from '../../components/thread/thread.component';
 import {
@@ -30,6 +32,8 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
   loading = true;
   error = '';
   currentUser: User | null = null;
+  /** Staff and admins may remove other people's comments. */
+  canModerate = false;
 
   readonly postTypeStyles = POST_TYPE_STYLES;
 
@@ -46,6 +50,7 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
     private router: Router,
     private postsService: ClubPostsService,
     private commentsService: PostCommentsService,
+    private clubsService: ClubsService,
     private store: Store,
   ) {}
 
@@ -53,7 +58,10 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
     this.store
       .select(selectUser)
       .pipe(takeUntil(this.destroy$))
-      .subscribe((user) => (this.currentUser = user));
+      .subscribe((user) => {
+        this.currentUser = user;
+        this.fetchModeration();
+      });
 
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
       this.clubId = Number(params.get('clubId')) || 0;
@@ -61,6 +69,7 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
       if (this.clubId && this.postId) {
         this.threadSource = createPostThreadSource(this.commentsService, this.clubId, this.postId);
         this.fetch();
+        this.fetchModeration();
       } else {
         this.loading = false;
         this.error = 'Invalid post URL.';
@@ -97,6 +106,21 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
 
   updateCommentCount(count: number): void {
     if (this.post) this.post.commentCount = count;
+  }
+
+  private fetchModeration(): void {
+    if (!this.clubId || !this.currentUser) {
+      this.canModerate = false;
+      return;
+    }
+
+    this.clubsService
+      .getClub(this.clubId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => (this.canModerate = isClubStaff(response.data ?? null)),
+        error: () => (this.canModerate = false),
+      });
   }
 
   private fetch(): void {

@@ -308,6 +308,69 @@ describe('ClubDiscussionsComponent', () => {
     });
   });
 
+  describe('moderating', () => {
+    async function asVolunteer(): Promise<void> {
+      TestBed.resetTestingModule();
+      await setup(makeCurrentUser({ Id: 1 }), false, { isVolunteer: true });
+      fixture.detectChanges();
+    }
+
+    it('offers removal to staff on other people’s discussions only', async () => {
+      fixture.detectChanges();
+      expect(component.canRemove(makeClubDiscussion({ userId: 2 }))).toBeFalse();
+
+      await asVolunteer();
+
+      expect(component.canRemove(makeClubDiscussion({ userId: 2 }))).toBeTrue();
+      expect(component.canRemove(makeClubDiscussion({ userId: 1 }))).toBeFalse();
+    });
+
+    it('removes with the reason, then reloads', async () => {
+      await asVolunteer();
+      component.openRemove(makeClubDiscussion({ id: 5, userId: 2 }));
+      component.removalReason = '  Spam  ';
+
+      component.resolveRemove(true);
+
+      expect(discussions.deleteDiscussion).toHaveBeenCalledWith(3, 5, 'Spam');
+      expect(component.success).toBe('Discussion removed.');
+      expect(component.removing).toBeNull();
+      expect(component.removalBusy).toBeFalse();
+      expect(discussions.getDiscussions).toHaveBeenCalledTimes(2);
+    });
+
+    it('does nothing when the dialog is dismissed', async () => {
+      await asVolunteer();
+      component.openRemove(makeClubDiscussion({ id: 5, userId: 2 }));
+
+      component.resolveRemove(false);
+
+      expect(discussions.deleteDiscussion).not.toHaveBeenCalled();
+      expect(component.removing).toBeNull();
+    });
+
+    it('shows the server’s refusal, such as a more senior author', async () => {
+      await asVolunteer();
+      discussions.deleteDiscussion.and.returnValue(
+        throwError(
+          () =>
+            new ApiClientClientError(
+              'You are not allowed to delete this discussion.',
+              403,
+              'FORBIDDEN',
+            ),
+        ),
+      );
+      component.openRemove(makeClubDiscussion({ id: 5, userId: 2 }));
+      component.removalReason = 'Spam';
+
+      component.resolveRemove(true);
+
+      expect(component.error).toBe('You are not allowed to delete this discussion.');
+      expect(component.removing).toBeNull();
+    });
+  });
+
   describe('paging', () => {
     it('appends the next page and ignores a request past the last page', () => {
       discussions.getDiscussions.and.returnValue(of(paged([makeClubDiscussion({ id: 1 })], 2, 2)));

@@ -3,6 +3,7 @@ using System.Text.Json;
 using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
@@ -49,6 +50,7 @@ public class ClubPostServiceTests
     public async Task CreateAsync_ShouldCreatePost_AndStageUpsert()
     {
         await using var harness = await ClubPostServiceHarness.CreateAsync();
+        harness.Access.Manager(harness.ClubId, harness.UserId);
         harness.PostRepositoryMock
             .Setup(repo => repo.CreateAsync(It.IsAny<ClubPost>()))
             .ReturnsAsync((ClubPost post) =>
@@ -78,6 +80,20 @@ public class ClubPostServiceTests
             post.Id == harness.PostId &&
             post.ClubId == harness.ClubId &&
             post.UserId == harness.UserId)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ShouldRefuseAVolunteerCreatingAPinnedPost()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync();
+
+        var action = () => harness.Service.CreateAsync(
+            harness.ClubId, harness.UserId, harness.UserRole, "Title", "Body", PostType.General, true);
+
+        await action.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage(ClubPostService.PinForbiddenMessage);
+        harness.PostRepositoryMock.Verify(repo => repo.CreateAsync(It.IsAny<ClubPost>()), Times.Never);
     }
 
     [Fact]
@@ -310,6 +326,7 @@ public class ClubPostServiceTests
     public async Task UpdateAsync_ShouldUpdatePost_StageUpsert_AndInvalidateCache()
     {
         await using var harness = await ClubPostServiceHarness.CreateAsync();
+        harness.Access.Manager(harness.ClubId, harness.UserId);
         var existing = harness.BuildPost();
         var updated = harness.BuildPost(title: "Updated", content: "Edited", postType: PostType.Event, isPinned: true);
 
@@ -335,6 +352,109 @@ public class ClubPostServiceTests
             post.Id == harness.PostId &&
             post.Title == "Updated")), Times.Once);
         harness.CacheMock.Verify(cache => cache.RemoveAsync($"post:{harness.PostId}"), Times.Once);
+        harness.Staged.Should().BeEmpty("authors changing their own post are not moderating");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldRefuseAVolunteerEditingAManagersPost()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync();
+        harness.Access.Manager(harness.ClubId, harness.SecondUserId);
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost(userId: harness.SecondUserId));
+
+        var action = () => harness.Service.UpdateAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole,
+            "Rewritten", "Rewritten body", PostType.General, false);
+
+        await action.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage("You are not allowed to update this post.");
+        harness.PostRepositoryMock.Verify(repo => repo.UpdateAsync(It.IsAny<int>(), It.IsAny<ClubPost>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldRefuseAVolunteerPinningTheirOwnPost()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync();
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost());
+
+        var action = () => harness.Service.UpdateAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole,
+            "Post title", "Post content", PostType.General, true);
+
+        await action.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage(ClubPostService.PinForbiddenMessage);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldLetAVolunteerEditTheirOwnPostWithoutChangingThePin()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync();
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost());
+        harness.PostRepositoryMock
+            .Setup(repo => repo.UpdateAsync(harness.PostId, It.IsAny<ClubPost>()))
+            .ReturnsAsync(harness.BuildPost(title: "Fixed typo"));
+
+        var result = await harness.Service.UpdateAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole,
+            "Fixed typo", "Post content", PostType.General, false);
+
+        result.Title.Should().Be("Fixed typo");
+        harness.Staged.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldLogAnEdit_WhenAManagerChangesAVolunteersPost()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync();
+        harness.Access.Manager(harness.ClubId, harness.UserId);
+        harness.Access.Volunteer(harness.ClubId, harness.SecondUserId);
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost(userId: harness.SecondUserId, title: "Original"));
+        harness.PostRepositoryMock
+            .Setup(repo => repo.UpdateAsync(harness.PostId, It.IsAny<ClubPost>()))
+            .ReturnsAsync(harness.BuildPost(userId: harness.SecondUserId, title: "Corrected"));
+
+        await harness.Service.UpdateAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole,
+            "Corrected", "Post content", PostType.General, false, "  Wrong date  ");
+
+        var entry = harness.Staged.Should().ContainSingle().Subject;
+        entry.Action.Should().Be(ClubModerationActionTypes.Edit);
+        entry.ContentType.Should().Be(ClubModerationContentTypes.Post);
+        entry.ActorClubRole.Should().Be(ClubModerationRoles.Manager);
+        entry.AuthorUserId.Should().Be(harness.SecondUserId);
+        entry.ContentSnapshot.Should().Be("Original");
+        entry.Reason.Should().Be("Wrong date");
+    }
+
+    [Theory]
+    [InlineData(false, true, ClubModerationActionTypes.Pin)]
+    [InlineData(true, false, ClubModerationActionTypes.Unpin)]
+    public async Task UpdateAsync_ShouldLogAPinChange_WhenOnlyThePinChanges(bool wasPinned, bool isPinned, string action)
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync();
+        harness.Access.Manager(harness.ClubId, harness.UserId);
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost(userId: harness.SecondUserId, isPinned: wasPinned));
+        harness.PostRepositoryMock
+            .Setup(repo => repo.UpdateAsync(harness.PostId, It.IsAny<ClubPost>()))
+            .ReturnsAsync(harness.BuildPost(userId: harness.SecondUserId, isPinned: isPinned));
+
+        await harness.Service.UpdateAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole,
+            "Post title", "Post content", PostType.General, isPinned);
+
+        harness.Staged.Should().ContainSingle().Which.Action.Should().Be(action);
     }
 
     [Fact]
@@ -355,6 +475,63 @@ public class ClubPostServiceTests
         await action.Should()
             .ThrowAsync<ForbiddenException>()
             .WithMessage("You are not allowed to delete this post.");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldRefuseAVolunteerDeletingTheOwnersPost()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync(ownerId: 30);
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost(userId: 30));
+
+        var action = () => harness.Service.DeleteAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole, "Outdated");
+
+        await action.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage("You are not allowed to delete this post.");
+        harness.PostRepositoryMock.Verify(repo => repo.DeleteAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldRequireAReason_WhenAManagerDeletesSomeoneElsesPost()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync(ownerId: 30);
+        harness.Access.Manager(harness.ClubId, harness.UserId);
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost(userId: 30));
+
+        var action = () => harness.Service.DeleteAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole);
+
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage(ClubModeration.ReasonRequiredMessage);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldLogTheRemoval_WhenAManagerDeletesTheOwnersPost()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync(ownerId: 30);
+        harness.Access.Manager(harness.ClubId, harness.UserId);
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost(userId: 30, title: "Old schedule"));
+        harness.PostRepositoryMock
+            .Setup(repo => repo.DeleteAsync(harness.PostId))
+            .ReturnsAsync(true);
+
+        await harness.Service.DeleteAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole, "Outdated");
+
+        var entry = harness.Staged.Should().ContainSingle().Subject;
+        entry.Action.Should().Be(ClubModerationActionTypes.Remove);
+        entry.AuthorUserId.Should().Be(30);
+        entry.ContentSnapshot.Should().Be("Old schedule");
+        entry.Reason.Should().Be("Outdated");
+        harness.OutboxWriterMock.Verify(writer => writer.StageDelete(harness.PostId), Times.Once);
     }
 
     [Fact]
@@ -458,9 +635,13 @@ public class ClubPostServiceTests
         public Mock<IClubPostSearchOutboxWriter> OutboxWriterMock { get; } = new();
         public Mock<IUserRepository> UserRepositoryMock { get; } = new();
         public Mock<IRefreshAheadCache> CacheMock { get; } = new();
+        public Mock<IClubModerationLog> ModerationLogMock { get; } = new();
+
+        /// <summary>Moderation log entries the service staged.</summary>
+        public List<ClubModerationAction> Staged { get; } = [];
         public ClubPostService Service { get; }
 
-        private ClubPostServiceHarness(SqliteConnection connection, AppDatabaseContext db, bool isPrivate)
+        private ClubPostServiceHarness(SqliteConnection connection, AppDatabaseContext db, bool isPrivate, int? ownerId)
         {
             _connection = connection;
             Db = db;
@@ -484,7 +665,7 @@ public class ClubPostServiceTests
 
             // The requesting user may manage posts (staff) and reads as a member. Ownership is
             // left out so a test can take those roles away with Access.Revoke.
-            Access.Club(club.Id, club.isPrivate)
+            Access.Club(club.Id, club.isPrivate, ownerId)
                 .Volunteer(ClubId, UserId)
                 .Member(ClubId, UserId);
 
@@ -518,10 +699,14 @@ public class ClubPostServiceTests
                 SearchServiceMock.Object,
                 OutboxWriterMock.Object,
                 UserRepositoryMock.Object,
-                CacheMock.Object);
+                CacheMock.Object,
+                ModerationLogMock.Object);
+            ModerationLogMock
+                .Setup(log => log.Stage(It.IsAny<ClubModerationAction>()))
+                .Callback((ClubModerationAction entry) => Staged.Add(entry));
         }
 
-        public static async Task<ClubPostServiceHarness> CreateAsync(bool isPrivate = false)
+        public static async Task<ClubPostServiceHarness> CreateAsync(bool isPrivate = false, int? ownerId = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
@@ -533,7 +718,7 @@ public class ClubPostServiceTests
             var db = new AppDatabaseContext(options);
             await db.Database.EnsureCreatedAsync();
 
-            return new ClubPostServiceHarness(connection, db, isPrivate);
+            return new ClubPostServiceHarness(connection, db, isPrivate, ownerId);
         }
 
         public ClubPost BuildPost(

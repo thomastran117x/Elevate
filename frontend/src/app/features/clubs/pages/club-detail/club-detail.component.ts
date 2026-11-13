@@ -8,7 +8,7 @@ import { Subject, takeUntil, finalize, debounceTime, distinctUntilChanged } from
 import { selectUser } from '../../../../core/stores/user.selectors';
 import { User } from '../../../../core/stores/user.model';
 import { ClubsService } from '../../services/clubs.service';
-import { Club, CLUB_TYPE_STYLES } from '../../models/club.types';
+import { Club, CLUB_TYPE_STYLES, isClubStaff } from '../../models/club.types';
 import { ClubPostsService } from '../../services/club-posts.service';
 import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
 import { ClubDiscussionsService } from '../../services/club-discussions.service';
@@ -19,6 +19,7 @@ import { ClubMember } from '../../models/club-management.types';
 import { ClubManagementService } from '../../services/club-management.service';
 import { EventsService } from '../../../events/services/events.service';
 import { getApiClientMessage } from '../../../../core/api/models/api-client-error.model';
+import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { FeatureFlagsService } from '../../../../core/features/feature-flags.service';
 import { FEATURE_KEYS } from '../../../../core/features/feature-flags.types';
 import { CATEGORY_STYLES, EventItem } from '../../../events/models/event.types';
@@ -28,7 +29,7 @@ export type DetailPanel = 'members' | 'events' | 'openEvents' | 'reviews';
 @Component({
   selector: 'app-club-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ConfirmDialogComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './club-detail.component.html',
 })
@@ -82,6 +83,10 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
   reviewSubmitting = false;
   reviewError = '';
   reviewDeletingId: number | null = null;
+  /** The review a moderator is removing, while the reason dialog is open. */
+  removingReview: ClubReview | null = null;
+  reviewRemovalReason = '';
+  reviewRemovalBusy = false;
   readonly reviewTitleMax = 100;
   readonly reviewCommentMax = 500;
 
@@ -372,6 +377,31 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     return this.currentUser != null && review.userId === this.currentUser.Id;
   }
 
+  /** Staff and admins may remove someone else's review; the server checks their rank. */
+  canRemoveReview(review: ClubReview): boolean {
+    return this.currentUser != null && !this.canEditReview(review) && isClubStaff(this.club);
+  }
+
+  openRemoveReview(review: ClubReview): void {
+    this.reviewError = '';
+    this.reviewRemovalReason = '';
+    this.removingReview = review;
+  }
+
+  resolveRemoveReview(confirmed: boolean): void {
+    const review = this.removingReview;
+    if (!confirmed || !review) {
+      this.removingReview = null;
+      return;
+    }
+
+    this.reviewRemovalBusy = true;
+    this.deleteReview(review, this.reviewRemovalReason.trim(), () => {
+      this.reviewRemovalBusy = false;
+      this.removingReview = null;
+    });
+  }
+
   openReviewForm(existing?: ClubReview): void {
     this.reviewError = '';
     if (existing) {
@@ -444,15 +474,18 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
       });
   }
 
-  deleteReview(review: ClubReview): void {
+  deleteReview(review: ClubReview, reason?: string, done?: () => void): void {
     this.reviewDeletingId = review.id;
     this.reviewError = '';
 
     this.reviewsService
-      .deleteReview(this.clubId, review.id)
+      .deleteReview(this.clubId, review.id, reason)
       .pipe(
         takeUntil(this.destroy$),
-        finalize(() => (this.reviewDeletingId = null)),
+        finalize(() => {
+          this.reviewDeletingId = null;
+          done?.();
+        }),
       )
       .subscribe({
         next: () => {

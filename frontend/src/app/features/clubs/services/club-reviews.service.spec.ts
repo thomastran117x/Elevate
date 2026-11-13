@@ -83,6 +83,15 @@ describe('ClubReviewsService', () => {
     request.flush(envelope(null));
   });
 
+  it('sends a moderation reason as a query parameter', () => {
+    service.deleteReview(3, 1, 'Abusive').subscribe();
+
+    const request = httpMock.expectOne((req) => req.url === `${base}/1`);
+    expect(request.request.method).toBe('DELETE');
+    expect(request.request.params.get('reason')).toBe('Abusive');
+    request.flush(envelope(null));
+  });
+
   it('surfaces a 4xx as a typed client error', () => {
     let thrown: unknown;
     service.createReview(3, { title: 'x', rating: 6 }).subscribe({ error: (e) => (thrown = e) });

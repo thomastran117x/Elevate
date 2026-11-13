@@ -53,13 +53,13 @@ public class ClubReviewControllerTests
         var service = new Mock<IClubReviewService>();
         var controller = CreateController(service.Object);
 
-        var result = await controller.DeleteReview(4, 9);
+        var result = await controller.DeleteReview(4, 9, "Spam");
 
         var ok = result.Should().BeOfType<ObjectResult>().Subject;
         ok.StatusCode.Should().Be(200);
         var response = ok.Value.Should().BeOfType<MessageResponse>().Subject;
         response.Message.Should().Contain("Review with ID 9 has been deleted successfully.");
-        service.Verify(s => s.DeleteReviewAsync(4, 9, 7), Times.Once);
+        service.Verify(s => s.DeleteReviewAsync(4, 9, 7, "Participant", "Spam"), Times.Once);
     }
 
     private static ClubReviewController CreateController(IClubReviewService service)

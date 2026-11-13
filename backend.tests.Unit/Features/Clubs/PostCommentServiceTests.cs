@@ -1,3 +1,4 @@
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.profile;
@@ -127,16 +128,138 @@ public class PostCommentServiceTests
             .WithMessage($"Post with ID {harness.PostId} was not found.");
     }
 
+    [Fact]
+    public async Task DeleteAsync_ShouldRefuseANonStaffCaller_OnSomeoneElsesComment()
+    {
+        var harness = new Harness(isPrivate: false);
+        harness.Comments.Setup(repository => repository.GetByIdAsync(40)).ReturnsAsync(new PostComment
+        {
+            Id = 40,
+            PostId = harness.PostId,
+            UserId = harness.MemberAuthorId,
+            Content = "Hello"
+        });
+
+        var act = () => harness.Service.DeleteAsync(
+            harness.ClubId, harness.PostId, 40, harness.UserId, "Participant", "Spam");
+
+        await act.Should().ThrowAsync<ForbiddenException>()
+            .WithMessage("You are not allowed to delete this comment.");
+        harness.Comments.Verify(repository => repository.SoftDeleteAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldRequireAReason_WhenStaffRemoveAMembersComment()
+    {
+        var harness = new Harness(isPrivate: false);
+        harness.Access.Volunteer(harness.ClubId, harness.UserId);
+        harness.Comments.Setup(repository => repository.GetByIdAsync(41)).ReturnsAsync(new PostComment
+        {
+            Id = 41,
+            PostId = harness.PostId,
+            UserId = harness.MemberAuthorId,
+            Content = "Buy now"
+        });
+
+        var act = () => harness.Service.DeleteAsync(
+            harness.ClubId, harness.PostId, 41, harness.UserId, "Volunteer");
+
+        await act.Should().ThrowAsync<BadRequestException>()
+            .WithMessage(ClubModeration.ReasonRequiredMessage);
+        harness.Comments.Verify(repository => repository.SoftDeleteAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldRemoveAndLog_WhenStaffRemoveAMembersComment()
+    {
+        var harness = new Harness(isPrivate: false);
+        harness.Access.Volunteer(harness.ClubId, harness.UserId);
+        harness.Comments.Setup(repository => repository.GetByIdAsync(42)).ReturnsAsync(new PostComment
+        {
+            Id = 42,
+            PostId = harness.PostId,
+            UserId = harness.MemberAuthorId,
+            Content = "Buy now"
+        });
+        harness.Comments.Setup(repository => repository.SoftDeleteAsync(42)).ReturnsAsync(new PostComment
+        {
+            Id = 42,
+            PostId = harness.PostId,
+            UserId = harness.MemberAuthorId,
+            IsDeleted = true
+        });
+        harness.SetupEmptyViewData(42);
+        ClubModerationAction? staged = null;
+        harness.ModerationLog.Setup(log => log.Stage(It.IsAny<ClubModerationAction>()))
+            .Callback((ClubModerationAction entry) => staged = entry);
+
+        var view = await harness.Service.DeleteAsync(
+            harness.ClubId, harness.PostId, 42, harness.UserId, "Volunteer", "Spam");
+
+        view.Comment.IsDeleted.Should().BeTrue();
+        staged.Should().NotBeNull();
+        staged!.ContentType.Should().Be(ClubModerationContentTypes.Comment);
+        staged.ActorClubRole.Should().Be(ClubModerationRoles.Volunteer);
+        staged.AuthorUserId.Should().Be(harness.MemberAuthorId);
+        staged.ContentSnapshot.Should().Be("Buy now");
+        staged.Reason.Should().Be("Spam");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldRefuseAVolunteerRemovingTheOwnersComment()
+    {
+        var harness = new Harness(isPrivate: false);
+        harness.Access.Volunteer(harness.ClubId, harness.UserId);
+        harness.Comments.Setup(repository => repository.GetByIdAsync(43)).ReturnsAsync(new PostComment
+        {
+            Id = 43,
+            PostId = harness.PostId,
+            UserId = harness.OwnerId,
+            Content = "Welcome"
+        });
+
+        var act = () => harness.Service.DeleteAsync(
+            harness.ClubId, harness.PostId, 43, harness.UserId, "Volunteer", "Spam");
+
+        await act.Should().ThrowAsync<ForbiddenException>();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldNotLog_WhenTheCommentWasAlreadyDeleted()
+    {
+        var harness = new Harness(isPrivate: false);
+        harness.Access.Manager(harness.ClubId, harness.UserId);
+        var deleted = new PostComment
+        {
+            Id = 44,
+            PostId = harness.PostId,
+            UserId = harness.MemberAuthorId,
+            IsDeleted = true
+        };
+        harness.Comments.Setup(repository => repository.GetByIdAsync(44)).ReturnsAsync(deleted);
+        harness.Comments.Setup(repository => repository.SoftDeleteAsync(44)).ReturnsAsync(deleted);
+        harness.SetupEmptyViewData(44);
+
+        await harness.Service.DeleteAsync(harness.ClubId, harness.PostId, 44, harness.UserId, "Participant");
+
+        harness.ModerationLog.Verify(log => log.Stage(It.IsAny<ClubModerationAction>()), Times.Never);
+    }
+
     private sealed class Harness
     {
         public Mock<IPostCommentRepository> Comments { get; } = new();
         public Mock<IClubPostRepository> Posts { get; } = new();
         public FakeClubAuthorizer Access { get; } = new();
         public Mock<IUserRepository> Users { get; } = new();
+        public Mock<IClubModerationLog> ModerationLog { get; } = new();
         public PostCommentService Service { get; }
         public int ClubId => 7;
         public int PostId => 8;
         public int UserId => 9;
+        public int OwnerId => 1;
+
+        /// <summary>A member with no staff role.</summary>
+        public int MemberAuthorId => 999;
 
         public Harness(bool isPrivate, int? postClubId = null)
         {
@@ -149,8 +272,9 @@ public class PostCommentServiceTests
                 Title = "Post",
                 Content = "Body"
             });
+            Access.Member(ClubId, MemberAuthorId);
             Service = new PostCommentService(
-                Comments.Object, Posts.Object, Access, Users.Object);
+                Comments.Object, Posts.Object, Access, Users.Object, ModerationLog.Object);
         }
 
         public void SetupEmptyViewData(int commentId)
