@@ -1,13 +1,14 @@
 namespace backend.main.application.security.authorization;
 
+/// <remarks><see cref="Denied"/> is the default value, so an uninitialized decision fails closed.</remarks>
 public enum PermissionOutcome
 {
+    Denied,
+
     Allowed,
 
     /// <summary>The resource does not exist. Callers report it with their usual not-found error.</summary>
     ResourceNotFound,
-
-    Denied,
 }
 
 /// <summary>The result of evaluating one permission for one caller and resource.</summary>

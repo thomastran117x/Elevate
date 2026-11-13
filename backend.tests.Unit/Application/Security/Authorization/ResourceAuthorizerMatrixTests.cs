@@ -79,6 +79,12 @@ public sealed class ResourceAuthorizerMatrixTests : IAsyncLifetime
     }
 
     [Fact]
+    public void DefaultDecision_ShouldBeADenial()
+    {
+        default(PermissionDecision).IsAllowed.Should().BeFalse("an uninitialized decision must fail closed");
+    }
+
+    [Fact]
     public async Task Evaluate_ShouldRejectAResourceOfTheWrongKind()
     {
         var act = () => _world.Authorizer.EvaluateAsync(
