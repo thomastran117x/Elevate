@@ -63,7 +63,8 @@ export interface ThreadDataSource<TItem extends ThreadItem> {
   ): Observable<ThreadPage<TItem> | null>;
   create(content: string, parentId: number | null): Observable<TItem | null>;
   update(itemId: number, content: string): Observable<TItem | null>;
-  remove(itemId: number): Observable<TItem | null>;
+  /** `reason` is required by the server when a moderator removes someone else's item. */
+  remove(itemId: number, reason?: string): Observable<TItem | null>;
   react(itemId: number, reaction: ThreadReaction): Observable<ThreadReactionResult | null>;
   clearReaction(itemId: number): Observable<ThreadReactionResult | null>;
 
@@ -121,9 +122,9 @@ export function createDiscussionThreadSource(
       service
         .updateReply(clubId, discussionId, itemId, content)
         .pipe(map((response) => response.data ?? null)),
-    remove: (itemId) =>
+    remove: (itemId, reason) =>
       service
-        .deleteReply(clubId, discussionId, itemId)
+        .deleteReply(clubId, discussionId, itemId, reason)
         .pipe(map((response) => response.data ?? null)),
     react: (itemId, reaction) =>
       service
@@ -186,8 +187,10 @@ export function createPostThreadSource(
       service
         .updateComment(clubId, postId, itemId, content)
         .pipe(map((response) => response.data ?? null)),
-    remove: (itemId) =>
-      service.deleteComment(clubId, postId, itemId).pipe(map((response) => response.data ?? null)),
+    remove: (itemId, reason) =>
+      service
+        .deleteComment(clubId, postId, itemId, reason)
+        .pipe(map((response) => response.data ?? null)),
     react: (itemId, reaction) =>
       service
         .setReaction(clubId, postId, itemId, reaction)

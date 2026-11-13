@@ -55,6 +55,18 @@ export class ConfirmDialogComponent implements OnChanges {
    */
   @Input() requireTypedConfirmation: string | null = null;
 
+  /**
+   * When set, the dialog asks for a written reason under this label, and the confirm button
+   * stays disabled until one is given. Bind it two-way with `[(reason)]`.
+   */
+  @Input() reasonLabel: string | null = null;
+
+  @Input() reasonMaxLength = 500;
+
+  @Input() reason = '';
+
+  @Output() readonly reasonChange = new EventEmitter<string>();
+
   @Input() busy = false;
 
   /** True to proceed, false when the operator backed out. */
@@ -129,7 +141,9 @@ export class ConfirmDialogComponent implements OnChanges {
     }
 
     return Array.from(
-      root.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])'),
+      root.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), textarea:not([disabled])',
+      ),
     );
   }
 
@@ -141,8 +155,17 @@ export class ConfirmDialogComponent implements OnChanges {
     return this.typedConfirmation.trim() === this.requireTypedConfirmation.trim();
   }
 
+  get reasonSatisfied(): boolean {
+    return !this.reasonLabel || this.reason.trim().length > 0;
+  }
+
   get canConfirm(): boolean {
-    return !this.busy && this.confirmationSatisfied;
+    return !this.busy && this.confirmationSatisfied && this.reasonSatisfied;
+  }
+
+  onReasonInput(value: string): void {
+    this.reason = value;
+    this.reasonChange.emit(value);
   }
 
   confirm(): void {

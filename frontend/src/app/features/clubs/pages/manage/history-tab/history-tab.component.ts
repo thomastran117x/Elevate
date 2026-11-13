@@ -7,11 +7,12 @@ import { finalize } from 'rxjs/operators';
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
 import { ClubVersionDetail, ClubVersionListItem } from '../../../models/club-management.types';
 import { ClubManagementService } from '../../../services/club-management.service';
+import { ModerationLogComponent } from './moderation-log/moderation-log.component';
 
 @Component({
   selector: 'app-history-tab',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ModerationLogComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './history-tab.component.html',
 })

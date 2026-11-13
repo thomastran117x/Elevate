@@ -64,6 +64,11 @@ import { ThreadNodeComponent } from './thread-node.component';
 export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
   @Input({ required: true }) source!: ThreadDataSource<ThreadDisplayItem>;
   @Input() currentUser: User | null = null;
+  /**
+   * The viewer is club staff or an admin, so they may remove other people's messages. The
+   * server still decides by rank and refuses content from more senior staff.
+   */
+  @Input() canModerate = false;
   @Input() initialCount = 0;
   @Output() countChange = new EventEmitter<number>();
 
@@ -226,7 +231,7 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
     if (action.type === 'loadChildren') this.loadChildren(action.node, action.append);
     if (action.type === 'create') this.createChild(action.node, action.content);
     if (action.type === 'edit') this.editItem(action.node, action.content);
-    if (action.type === 'delete') this.deleteItem(action.node);
+    if (action.type === 'delete') this.deleteItem(action.node, action.reason);
     if (action.type === 'react') this.toggleReaction(action.node, action.reaction);
     if (action.type === 'typing') this.markComposing(action.node.id, action.active);
   }
@@ -328,11 +333,11 @@ export class ThreadComponent implements OnInit, OnChanges, OnDestroy {
       });
   }
 
-  private deleteItem(node: ThreadDisplayNode): void {
+  private deleteItem(node: ThreadDisplayNode, reason?: string): void {
     node.busy = true;
     node.error = '';
     this.source
-      .remove(node.id)
+      .remove(node.id, reason)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (item) => {

@@ -55,6 +55,39 @@ describe('ConfirmDialogComponent', () => {
     });
   });
 
+  describe('required reason', () => {
+    beforeEach(() => {
+      component.reasonLabel = 'Reason for removal';
+    });
+
+    it('blocks confirming until a non-blank reason is written', () => {
+      expect(component.canConfirm).toBeFalse();
+
+      component.onReasonInput('   ');
+      expect(component.canConfirm).toBeFalse();
+
+      component.onReasonInput('Spam');
+      expect(component.canConfirm).toBeTrue();
+      component.confirm();
+      expect(resolved).toEqual([true]);
+    });
+
+    it('reports every edit so the parent can bind the reason two-way', () => {
+      const emitted: string[] = [];
+      component.reasonChange.subscribe((value) => emitted.push(value));
+
+      component.onReasonInput('Off topic');
+
+      expect(component.reason).toBe('Off topic');
+      expect(emitted).toEqual(['Off topic']);
+    });
+
+    it('is not required when no reason is asked for', () => {
+      component.reasonLabel = null;
+      expect(component.canConfirm).toBeTrue();
+    });
+  });
+
   describe('while a request is in flight', () => {
     beforeEach(() => {
       component.busy = true;

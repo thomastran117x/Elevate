@@ -90,10 +90,11 @@ export class ClubPostsService {
       .pipe(map((response) => this.mapPost(response)));
   }
 
-  deletePost(clubId: number, postId: number): Observable<ApiEnvelope<unknown>> {
+  /** `reason` is required by the server when the caller is removing someone else's post. */
+  deletePost(clubId: number, postId: number, reason?: string): Observable<ApiEnvelope<unknown>> {
     return this.http.delete<ApiEnvelope<unknown>>(
       `${environment.backendUrl}/clubs/${clubId}/posts/${postId}`,
-      { withCredentials: true },
+      { withCredentials: true, ...(reason ? { params: { reason } } : {}) },
     );
   }
 

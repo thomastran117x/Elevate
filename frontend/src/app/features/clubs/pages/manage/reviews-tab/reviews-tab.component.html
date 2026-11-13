@@ -1,4 +1,9 @@
 <div class="flex flex-col gap-6">
+  @if (success) {
+    <div class="rounded-2xl border border-success/30 bg-success/10 px-5 py-4 text-sm text-success">
+      {{ success }}
+    </div>
+  }
   @if (error) {
     <div class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger">
       {{ error }}
@@ -92,6 +97,17 @@
                 {{ review.comment }}
               </p>
             }
+            @if (canRemoveReview(review)) {
+              <div class="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  (click)="openRemoveReview(review)"
+                  class="text-xs font-semibold text-danger transition hover:text-danger/80"
+                >
+                  Remove
+                </button>
+              </div>
+            }
           </li>
         }
       </ul>
@@ -121,3 +137,21 @@
     }
   </article>
 </div>
+
+<app-confirm-dialog
+  [open]="!!removingReview"
+  title="Remove this review?"
+  [body]="
+    removingReview
+      ? 'Remove “' +
+        removingReview.title +
+        '” from the club. The reason is recorded in the club’s moderation log.'
+      : ''
+  "
+  reasonLabel="Reason for removal"
+  [(reason)]="reviewRemovalReason"
+  confirmLabel="Remove"
+  tone="danger"
+  [busy]="reviewRemovalBusy"
+  (resolve)="resolveRemoveReview($event)"
+/>

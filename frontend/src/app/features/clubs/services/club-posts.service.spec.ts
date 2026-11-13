@@ -110,6 +110,15 @@ describe('ClubPostsService', () => {
     const request = httpMock.expectOne(`${base}/9`);
     expect(request.request.method).toBe('DELETE');
     expect(request.request.withCredentials).toBeTrue();
+    expect(request.request.params.has('reason')).toBeFalse();
+    request.flush(envelope(null));
+  });
+
+  it('sends a moderation reason as a query parameter', () => {
+    service.deletePost(3, 9, 'Outdated').subscribe();
+
+    const request = httpMock.expectOne((req) => req.url === `${base}/9`);
+    expect(request.request.params.get('reason')).toBe('Outdated');
     request.flush(envelope(null));
   });
 });

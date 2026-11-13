@@ -155,4 +155,8 @@
       </button>
     </div>
   </article>
+
+  @if (clubId) {
+    <app-moderation-log [clubId]="clubId" />
+  }
 </div>

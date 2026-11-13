@@ -117,6 +117,15 @@ describe('ClubDiscussionsService', () => {
     request.flush(envelope(null));
   });
 
+  it('sends a moderation reason as a query parameter', () => {
+    service.deleteDiscussion(3, 1, 'Spam').subscribe();
+
+    const request = httpMock.expectOne((req) => req.url === `${base}/1`);
+    expect(request.request.method).toBe('DELETE');
+    expect(request.request.params.get('reason')).toBe('Spam');
+    request.flush(envelope(null));
+  });
+
   it('surfaces a 4xx as a typed client error', () => {
     let thrown: unknown;
     service
