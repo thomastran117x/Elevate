@@ -56,8 +56,11 @@ The matrix records the current product rules, including these known gaps. Each i
   - events in a private club;
   - reviewing any club.
 - **Realtime access (#392).** Access is checked when a connection joins a group, not afterwards.
-- **Moderation.** Any club staff member, volunteers included, may edit, pin and delete any post. Comments, replies, discussions and reviews are author-only, with no staff or admin moderation. Discussion edits do not re-check membership.
-- **Payments.** There is no admin read or refund of another user's payment. `POST /api/payments/{eventId}` checks visibility in the service, after the idempotency replay. The replay is tracked as a separate security issue.
+- **Moderation (#402).** Any club staff member, volunteers included, may edit, pin and delete any post. Comments, replies, discussions and reviews are author-only, with no staff or admin moderation. Discussion edits do not re-check membership.
+- **Payments (#401, #397).** There is no admin read or refund of another user's payment. `POST /api/payments/{eventId}` checks visibility in the service, after the idempotency replay, which is not scoped to the caller (#401).
+- **Invitations (#403).** Accepting an invitation or redeeming a link does not re-check that its issuer still holds the role that let them send it.
+- **Membership integrity (#404).** Membership rows have no unique constraint, and invite-link limits and `MaxMemberCount` are not enforced atomically.
+- **Version rollback (#405).** Rolling a club back restores its privacy setting along with its content.
 - **Self-service after losing access.** Leaving a waitlist and removing a favourite are allowed after the event is no longer visible; unregistering is not.
 
 ## Declaring permissions for a new endpoint
