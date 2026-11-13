@@ -1,5 +1,6 @@
 using backend.main.application.security.authorization;
 using backend.main.features.cache;
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.search;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
@@ -17,6 +18,7 @@ namespace backend.main.features.clubs.reviews
         private readonly IClubSearchOutboxWriter _outboxWriter;
         private readonly ICacheService _cache;
         private readonly IResourceAuthorizer _authorizer;
+        private readonly IClubModerationLog _moderationLog;
 
         public ClubReviewService(
             AppDatabaseContext db,
@@ -25,7 +27,8 @@ namespace backend.main.features.clubs.reviews
             IUserRepository userRepository,
             IClubSearchOutboxWriter outboxWriter,
             ICacheService cache,
-            IResourceAuthorizer authorizer)
+            IResourceAuthorizer authorizer,
+            IClubModerationLog moderationLog)
         {
             _db = db;
             _reviewRepository = reviewRepository;
@@ -34,6 +37,7 @@ namespace backend.main.features.clubs.reviews
             _outboxWriter = outboxWriter;
             _cache = cache;
             _authorizer = authorizer;
+            _moderationLog = moderationLog;
         }
 
         public async Task<ClubReview> CreateReviewAsync(int clubId, int userId, string title, int rating, string? comment)
@@ -112,7 +116,7 @@ namespace backend.main.features.clubs.reviews
             return updated;
         }
 
-        public async Task DeleteReviewAsync(int clubId, int reviewId, int userId)
+        public async Task DeleteReviewAsync(int clubId, int reviewId, int userId, string? userRole, string? reason = null)
         {
             var review = await _reviewRepository.GetByIdAsync(reviewId)
                 ?? throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
@@ -120,14 +124,28 @@ namespace backend.main.features.clubs.reviews
             if (review.ClubId != clubId)
                 throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
 
-            await EnsureAuthorAsync(review, userId, "delete");
+            // The author, staff who outrank the author in this club, or an admin.
+            var resource = new ClubContentResource(clubId, ClubModerationContentTypes.Review, review.Id, review.UserId);
+            var decision = await _authorizer.AuthorizeContentAsync(
+                ResourceActor.User(userId, userRole),
+                Permissions.ContentRemove,
+                resource,
+                new PermissionMessages("You are not allowed to delete this review."));
+
+            if (decision.IsModeration)
+            {
+                var moderationReason = ClubModeration.RequireReason(reason);
+                // Staged before the delete so it commits in the repository's save.
+                _moderationLog.Stage(ClubModeration.Entry(
+                    resource, userId, decision, ClubModerationActionTypes.Remove, review.Title, moderationReason));
+            }
 
             await _reviewRepository.DeleteAsync(reviewId);
 
             await UpdateClubRatingAsync(review.ClubId);
         }
 
-        // Known deviation recorded in the matrix: reviews are author-only, with no staff moderation.
+        // Editing stays with the author; moderators remove reviews rather than rewrite them.
         private Task EnsureAuthorAsync(ClubReview review, int userId, string action) =>
             _authorizer.EnsureAsync(
                 ResourceActor.User(userId, null),

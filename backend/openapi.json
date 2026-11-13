@@ -11752,6 +11752,13 @@
             "schema": {
               "$ref": "#/components/schemas/Int32"
             }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/String"
+            }
           }
         ],
         "responses": {
@@ -12328,6 +12335,13 @@
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/String"
             }
           }
         ],
@@ -12952,6 +12966,13 @@
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/String"
             }
           }
         ],
@@ -15436,6 +15457,13 @@
             "schema": {
               "$ref": "#/components/schemas/Int32"
             }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/String"
+            }
           }
         ],
         "responses": {
@@ -15872,6 +15900,13 @@
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/Int32"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/String"
             }
           }
         ],
@@ -29434,6 +29469,17 @@
           },
           "isPinned": {
             "$ref": "#/components/schemas/Boolean"
+          },
+          "moderationReason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Why a moderator changed someone else's post; recorded in the moderation log.",
+                "$ref": "#/components/schemas/String"
+              }
+            ]
           }
         }
       },

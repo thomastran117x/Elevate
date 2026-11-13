@@ -1,4 +1,5 @@
 using backend.main.application.security.authorization;
+using backend.main.shared.attributes.validation;
 using backend.main.shared.exceptions.http;
 
 namespace backend.main.features.clubs.moderation;
@@ -16,6 +17,8 @@ public static class ClubModeration
 
     public const string ReasonRequiredMessage = "A reason is required to remove someone else's content.";
     public const string ReasonTooLongMessage = "The moderation reason cannot exceed 500 characters.";
+    public const string ReasonInvalidMessage = "The moderation reason contains markup or unsupported characters.";
+    public const string ReasonProhibitedMessage = "The moderation reason contains prohibited language.";
 
     /// <summary>
     /// Checks <paramref name="permission"/> on the content and throws the API's usual refusal,
@@ -40,15 +43,26 @@ public static class ClubModeration
     public static string RequireReason(string? reason) =>
         OptionalReason(reason) ?? throw new BadRequestException(ReasonRequiredMessage);
 
-    /// <summary>The trimmed reason, or <c>null</c> when none was given.</summary>
+    /// <summary>
+    /// The normalized reason, or <c>null</c> when none was given. Removals take the reason from
+    /// the query string, where the JSON body's text policy does not run, so the same plain-text
+    /// rules are applied here.
+    /// </summary>
     public static string? OptionalReason(string? reason)
     {
-        var trimmed = reason?.Trim();
-        if (string.IsNullOrEmpty(trimmed))
+        if (reason is null)
             return null;
-        if (trimmed.Length > ReasonMaxLength)
+        var normalized = ContentTextPolicy.Normalize(reason);
+        if (normalized.Length == 0)
+            return null;
+        if (normalized.Length > ReasonMaxLength)
             throw new BadRequestException(ReasonTooLongMessage);
-        return trimmed;
+        return ContentTextPolicy.Validate(normalized, allowLineBreaks: true) switch
+        {
+            ContentTextViolation.None => normalized,
+            ContentTextViolation.ProhibitedLanguage => throw new BadRequestException(ReasonProhibitedMessage),
+            _ => throw new BadRequestException(ReasonInvalidMessage),
+        };
     }
 
     /// <summary>Builds the log entry for a moderation action.</summary>

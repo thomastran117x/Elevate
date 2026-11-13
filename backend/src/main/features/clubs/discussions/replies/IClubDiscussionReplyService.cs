@@ -16,8 +16,12 @@ public interface IClubDiscussionReplyService
         int clubId, int discussionId, int? parentReplyId, int userId, string? userRole, string content);
     Task<DiscussionReplyView> UpdateAsync(
         int clubId, int discussionId, int replyId, int userId, string? userRole, string content);
+    /// <summary>
+    /// Soft-deletes a reply: its author, staff who outrank the author, or an admin. Removing
+    /// someone else's reply needs a reason and is logged.
+    /// </summary>
     Task<DiscussionReplyView> DeleteAsync(
-        int clubId, int discussionId, int replyId, int userId, string? userRole);
+        int clubId, int discussionId, int replyId, int userId, string? userRole, string? reason = null);
     Task<DiscussionReplyReactionSummary> SetReactionAsync(
         int clubId, int discussionId, int replyId, int userId, string? userRole,
         DiscussionReplyReactionType reaction);

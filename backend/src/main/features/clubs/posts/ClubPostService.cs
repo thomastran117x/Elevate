@@ -1,5 +1,6 @@
 using backend.main.application.security.authorization;
 using backend.main.features.cache;
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
 using backend.main.features.profile;
@@ -29,6 +30,7 @@ namespace backend.main.features.clubs.posts
         private readonly IClubPostSearchOutboxWriter _outboxWriter;
         private readonly IUserRepository _userRepository;
         private readonly IRefreshAheadCache _cache;
+        private readonly IClubModerationLog _moderationLog;
 
         public ClubPostService(
             AppDatabaseContext db,
@@ -38,7 +40,8 @@ namespace backend.main.features.clubs.posts
             IClubPostSearchService searchService,
             IClubPostSearchOutboxWriter outboxWriter,
             IUserRepository userRepository,
-            IRefreshAheadCache cache)
+            IRefreshAheadCache cache,
+            IClubModerationLog moderationLog)
         {
             _db = db;
             _postRepository = postRepository;
@@ -48,6 +51,7 @@ namespace backend.main.features.clubs.posts
             _outboxWriter = outboxWriter;
             _userRepository = userRepository;
             _cache = cache;
+            _moderationLog = moderationLog;
         }
 
         public const string ReadAnonymousMessage = "Authentication is required to view posts for a private club.";
@@ -55,10 +59,13 @@ namespace backend.main.features.clubs.posts
         public const string CreateForbiddenMessage = "You are not allowed to create posts for this club.";
         public const string UpdateForbiddenMessage = "You are not allowed to update this post.";
         public const string DeleteForbiddenMessage = "You are not allowed to delete this post.";
+        public const string PinForbiddenMessage = "Only the club's managers and owner can pin or unpin posts.";
 
         public async Task<ClubPost> CreateAsync(int clubId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
         {
             await EnsureStaffAsync(clubId, userId, userRole, CreateForbiddenMessage);
+            if (isPinned)
+                await EnsureCanPinAsync(clubId, userId, userRole);
 
             // The entity is built inside the retryable unit on purpose. An execution-strategy
             // retry re-runs this delegate, and reusing an instance from a previous attempt
@@ -143,18 +150,40 @@ namespace backend.main.features.clubs.posts
             return (resultPosts, totalCount, ResponseSource.Database, await FetchAuthorLookupAsync(resultPosts));
         }
 
-        public async Task<ClubPost> UpdateAsync(int clubId, int postId, int userId, string userRole, string title, string content, PostType postType, bool isPinned)
+        public async Task<ClubPost> UpdateAsync(
+            int clubId, int postId, int userId, string userRole, string title, string content, PostType postType, bool isPinned,
+            string? moderationReason = null)
         {
-            var post = await _postRepository.GetByIdAsync(postId)
+            var existing = await _postRepository.GetByIdAsync(postId)
                 ?? throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
-            if (post.ClubId != clubId)
+            if (existing.ClubId != clubId)
                 throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
             await EnsureStaffAsync(clubId, userId, userRole, UpdateForbiddenMessage);
+            var resource = ContentOf(existing);
+            var decision = await _authorizer.AuthorizeContentAsync(
+                ResourceActor.User(userId, userRole),
+                Permissions.PostManage,
+                resource,
+                new PermissionMessages(UpdateForbiddenMessage));
+
+            var pinChanged = existing.IsPinned != isPinned;
+            if (pinChanged)
+                await EnsureCanPinAsync(clubId, userId, userRole);
+
+            var reason = ClubModeration.OptionalReason(moderationReason);
+            var contentChanged = existing.Title != title || existing.Content != content || existing.PostType != postType;
+            var action = contentChanged || !pinChanged
+                ? ClubModerationActionTypes.Edit
+                : isPinned ? ClubModerationActionTypes.Pin : ClubModerationActionTypes.Unpin;
+            var snapshot = existing.Title;
 
             var updated = await ExecuteInTransactionAsync(async () =>
             {
+                if (decision.IsModeration)
+                    _moderationLog.Stage(ClubModeration.Entry(resource, userId, decision, action, snapshot, reason));
+
                 var post = await _postRepository.UpdateAsync(postId, new ClubPost
                 {
                     Title = title,
@@ -175,7 +204,7 @@ namespace backend.main.features.clubs.posts
             return updated;
         }
 
-        public async Task DeleteAsync(int clubId, int postId, int userId, string userRole)
+        public async Task DeleteAsync(int clubId, int postId, int userId, string userRole, string? reason = null)
         {
             var post = await _postRepository.GetByIdAsync(postId)
                 ?? throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
@@ -184,9 +213,22 @@ namespace backend.main.features.clubs.posts
                 throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
             await EnsureStaffAsync(clubId, userId, userRole, DeleteForbiddenMessage);
+            var resource = ContentOf(post);
+            var decision = await _authorizer.AuthorizeContentAsync(
+                ResourceActor.User(userId, userRole),
+                Permissions.PostManage,
+                resource,
+                new PermissionMessages(DeleteForbiddenMessage));
+            var moderationReason = decision.IsModeration ? ClubModeration.RequireReason(reason) : null;
 
             await ExecuteInTransactionAsync(async () =>
             {
+                if (decision.IsModeration)
+                {
+                    _moderationLog.Stage(ClubModeration.Entry(
+                        resource, userId, decision, ClubModerationActionTypes.Remove, post.Title, moderationReason));
+                }
+
                 await _postRepository.DeleteAsync(postId);
                 _outboxWriter.StageDelete(postId);
                 await _db.SaveChangesAsync();
@@ -203,14 +245,24 @@ namespace backend.main.features.clubs.posts
                 new ClubResource(clubId),
                 new PermissionMessages(ReadForbiddenMessage, ReadAnonymousMessage));
 
-        // Known deviation recorded in the matrix: any staff member, volunteers included, may
-        // create, edit, pin and delete any post.
+        // Any staff member may post. Changing a post also needs post.manage: its author while still
+        // staff, or a manager, the owner or an admin. Pinning is for managers, the owner and admins.
         private Task EnsureStaffAsync(int clubId, int userId, string userRole, string message) =>
             _authorizer.EnsureAsync(
                 ResourceActor.User(userId, userRole),
                 Permissions.ClubStaffAccess,
                 new ClubResource(clubId),
                 new PermissionMessages(message));
+
+        private Task EnsureCanPinAsync(int clubId, int userId, string userRole) =>
+            _authorizer.EnsureAsync(
+                ResourceActor.User(userId, userRole),
+                Permissions.ClubManage,
+                new ClubResource(clubId),
+                new PermissionMessages(PinForbiddenMessage));
+
+        private static ClubContentResource ContentOf(ClubPost post) =>
+            new(post.ClubId, ClubModerationContentTypes.Post, post.Id, post.UserId);
 
         public async Task<(List<ClubPost> Items, int TotalCount, string Source)> GetAllAdminAsync(
             string? search, PostSortBy sortBy, int page, int pageSize)

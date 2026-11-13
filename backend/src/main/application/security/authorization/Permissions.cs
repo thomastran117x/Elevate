@@ -19,6 +19,8 @@ public static class PermissionNames
     public const string MediaView = "media.view";
     public const string UserSelfOrAdmin = "user.self-or-admin";
     public const string ContentAuthor = "content.author";
+    public const string PostManage = "post.manage";
+    public const string ContentRemove = "content.remove";
 }
 
 /// <summary>
@@ -68,7 +70,7 @@ public static class Permissions
         Allowed: ClubStaffOrAdmin,
         AllowedWhenPublic: None,
         PermissionDenial.Forbid,
-        "Staff work: create, edit, pin and delete club posts.");
+        "Staff work: create club posts, and edit or delete one's own.");
 
     public static readonly Permission ClubManage = new(
         PermissionNames.ClubManage,
@@ -76,7 +78,8 @@ public static class Permissions
         Allowed: ClubManagers,
         AllowedWhenPublic: None,
         PermissionDenial.Forbid,
-        "Edit the club, its versions and rollbacks, member invitations and links, analytics, events and series.");
+        "Edit the club, its versions and rollbacks, member invitations and links, analytics, events and series. "
+            + "Pin and unpin posts, and read the moderation log.");
 
     public static readonly Permission ClubOwn = new(
         PermissionNames.ClubOwn,
@@ -153,6 +156,24 @@ public static class Permissions
         PermissionDenial.Forbid,
         "Edit or delete one's own discussion, reply, comment or review.");
 
+    public static readonly Permission PostManage = new(
+        PermissionNames.PostManage,
+        ResourceKind.ClubContent,
+        Allowed: Author | ClubManagers,
+        AllowedWhenPublic: None,
+        PermissionDenial.Forbid,
+        "Edit or delete a club post: its author, who must also still be staff (club.staff), or a manager, "
+            + "the owner or an admin.");
+
+    public static readonly Permission ContentRemove = new(
+        PermissionNames.ContentRemove,
+        ResourceKind.ClubContent,
+        Allowed: Author | SeniorStaff | Admin,
+        AllowedWhenPublic: None,
+        PermissionDenial.Forbid,
+        "Remove a discussion, reply, comment or review: its author, club staff of a higher rank than the "
+            + "author (owner, then manager, then volunteer), or an admin.");
+
     public static readonly IReadOnlyList<Permission> All =
     [
         ClubRead,
@@ -169,6 +190,8 @@ public static class Permissions
         MediaView,
         UserSelfOrAdmin,
         ContentAuthor,
+        PostManage,
+        ContentRemove,
     ];
 
     private static readonly Dictionary<string, Permission> ByName =

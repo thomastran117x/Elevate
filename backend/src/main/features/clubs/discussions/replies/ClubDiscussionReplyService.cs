@@ -1,4 +1,5 @@
 using backend.main.application.security.authorization;
+using backend.main.features.clubs.moderation;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
@@ -11,6 +12,7 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
     private readonly IClubDiscussionRepository _discussionRepository;
     private readonly IResourceAuthorizer _authorizer;
     private readonly IUserRepository _userRepository;
+    private readonly IClubModerationLog _moderationLog;
 
     public const string ReadAnonymousMessage = "Authentication is required to view discussions for a private club.";
     public const string ReadForbiddenMessage = "You must be a member of this club to view its discussions.";
@@ -20,12 +22,14 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
         IClubDiscussionReplyRepository replyRepository,
         IClubDiscussionRepository discussionRepository,
         IResourceAuthorizer authorizer,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IClubModerationLog moderationLog)
     {
         _replyRepository = replyRepository;
         _discussionRepository = discussionRepository;
         _authorizer = authorizer;
         _userRepository = userRepository;
+        _moderationLog = moderationLog;
     }
 
     public Task EnsureCanReadClubAsync(int clubId, int? userId, string? userRole) =>
@@ -105,12 +109,29 @@ public sealed class ClubDiscussionReplyService : IClubDiscussionReplyService
     }
 
     public async Task<DiscussionReplyView> DeleteAsync(
-        int clubId, int discussionId, int replyId, int userId, string? userRole)
+        int clubId, int discussionId, int replyId, int userId, string? userRole, string? reason = null)
     {
         await EnsureCanParticipateAsync(clubId, userId, userRole);
         await GetDiscussionAsync(clubId, discussionId);
         var reply = await GetReplyAsync(discussionId, replyId);
-        await EnsureAuthorAsync(reply, userId, "delete");
+
+        // The author, staff who outrank the author in this club, or an admin.
+        var resource = new ClubContentResource(clubId, ClubModerationContentTypes.Reply, reply.Id, reply.UserId);
+        var decision = await _authorizer.AuthorizeContentAsync(
+            ResourceActor.User(userId, userRole),
+            Permissions.ContentRemove,
+            resource,
+            new PermissionMessages("You are not allowed to delete this reply."));
+
+        // Deleting an already deleted reply changes nothing, so there is nothing to record.
+        if (decision.IsModeration && !reply.IsDeleted)
+        {
+            var moderationReason = ClubModeration.RequireReason(reason);
+            // Staged before the soft delete so it commits in the repository's transaction.
+            _moderationLog.Stage(ClubModeration.Entry(
+                resource, userId, decision, ClubModerationActionTypes.Remove, reply.Content, moderationReason));
+        }
+
         var deleted = await _replyRepository.SoftDeleteAsync(replyId)
             ?? throw new ResourceNotFoundException($"Reply with ID {replyId} was not found.");
         return await BuildViewAsync(deleted, userId);

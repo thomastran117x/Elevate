@@ -1,4 +1,5 @@
 using backend.main.features.clubs.discussions;
+using backend.main.features.clubs.moderation;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.shared.exceptions.http;
@@ -180,11 +181,13 @@ public class ClubDiscussionServiceTests
     public async Task UpdateAsync_ShouldThrow_WhenDiscussionDoesNotExist()
     {
         var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: false, isMember: true);
         harness.DiscussionRepositoryMock
             .Setup(repo => repo.GetByIdAsync(50))
             .ReturnsAsync((ClubDiscussion?)null);
 
-        var action = () => harness.Service.UpdateAsync(harness.ClubId, 50, harness.UserId, "T", "D");
+        var action = () => harness.Service.UpdateAsync(harness.ClubId, 50, harness.UserId, "Participant", "T", "D");
 
         await action.Should()
             .ThrowAsync<ResourceNotFoundException>()
@@ -195,11 +198,13 @@ public class ClubDiscussionServiceTests
     public async Task UpdateAsync_ShouldThrowNotFound_WhenDiscussionBelongsToAnotherClub()
     {
         var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: false, isMember: true);
         harness.DiscussionRepositoryMock
             .Setup(repo => repo.GetByIdAsync(51))
             .ReturnsAsync(new ClubDiscussion { Id = 51, ClubId = 999, UserId = harness.UserId });
 
-        var action = () => harness.Service.UpdateAsync(harness.ClubId, 51, harness.UserId, "T", "D");
+        var action = () => harness.Service.UpdateAsync(harness.ClubId, 51, harness.UserId, "Participant", "T", "D");
 
         await action.Should()
             .ThrowAsync<ResourceNotFoundException>()
@@ -210,11 +215,13 @@ public class ClubDiscussionServiceTests
     public async Task UpdateAsync_ShouldThrow_WhenDiscussionBelongsToAnotherUser()
     {
         var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: false, isMember: true);
         harness.DiscussionRepositoryMock
             .Setup(repo => repo.GetByIdAsync(52))
             .ReturnsAsync(new ClubDiscussion { Id = 52, ClubId = harness.ClubId, UserId = harness.OtherUserId });
 
-        var action = () => harness.Service.UpdateAsync(harness.ClubId, 52, harness.UserId, "T", "D");
+        var action = () => harness.Service.UpdateAsync(harness.ClubId, 52, harness.UserId, "Participant", "T", "D");
 
         await action.Should()
             .ThrowAsync<ForbiddenException>()
@@ -222,9 +229,42 @@ public class ClubDiscussionServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_ShouldNotLetStaffRewriteSomeoneElsesDiscussion()
+    {
+        var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: true, isMember: false);
+        harness.DiscussionRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(55))
+            .ReturnsAsync(new ClubDiscussion { Id = 55, ClubId = harness.ClubId, UserId = harness.MemberAuthorId });
+
+        var action = () => harness.Service.UpdateAsync(harness.ClubId, 55, harness.UserId, "Volunteer", "T", "D");
+
+        await action.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage("You are not allowed to update this discussion.");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldRefuseAnAuthorWhoNoLongerBelongsToTheClub()
+    {
+        var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: true);
+
+        var action = () => harness.Service.UpdateAsync(harness.ClubId, 56, harness.UserId, "Participant", "T", "D");
+
+        await action.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage(ClubDiscussionService.ContributeForbiddenMessage);
+        harness.DiscussionRepositoryMock.Verify(repo => repo.GetByIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
     public async Task UpdateAsync_ShouldThrowNotFound_WhenTheRowDisappearsMidUpdate()
     {
         var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: false, isMember: true);
         harness.DiscussionRepositoryMock
             .Setup(repo => repo.GetByIdAsync(53))
             .ReturnsAsync(new ClubDiscussion { Id = 53, ClubId = harness.ClubId, UserId = harness.UserId });
@@ -232,7 +272,7 @@ public class ClubDiscussionServiceTests
             .Setup(repo => repo.UpdateAsync(53, It.IsAny<ClubDiscussion>()))
             .ReturnsAsync((ClubDiscussion?)null);
 
-        var action = () => harness.Service.UpdateAsync(harness.ClubId, 53, harness.UserId, "T", "D");
+        var action = () => harness.Service.UpdateAsync(harness.ClubId, 53, harness.UserId, "Participant", "T", "D");
 
         await action.Should()
             .ThrowAsync<ResourceNotFoundException>()
@@ -243,6 +283,8 @@ public class ClubDiscussionServiceTests
     public async Task UpdateAsync_ShouldUpdateDiscussion_WhenCallerIsTheAuthor()
     {
         var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: false, isMember: true);
         harness.DiscussionRepositoryMock
             .Setup(repo => repo.GetByIdAsync(54))
             .ReturnsAsync(new ClubDiscussion
@@ -263,7 +305,7 @@ public class ClubDiscussionServiceTests
                 return updated;
             });
 
-        var updated = await harness.Service.UpdateAsync(harness.ClubId, 54, harness.UserId, "New", "New body");
+        var updated = await harness.Service.UpdateAsync(harness.ClubId, 54, harness.UserId, "Participant", "New", "New body");
 
         updated.Title.Should().Be("New");
         updated.Description.Should().Be("New body");
@@ -273,11 +315,13 @@ public class ClubDiscussionServiceTests
     public async Task DeleteAsync_ShouldThrow_WhenDiscussionDoesNotExist()
     {
         var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: false, isMember: true);
         harness.DiscussionRepositoryMock
             .Setup(repo => repo.GetByIdAsync(60))
             .ReturnsAsync((ClubDiscussion?)null);
 
-        var action = () => harness.Service.DeleteAsync(harness.ClubId, 60, harness.UserId);
+        var action = () => harness.Service.DeleteAsync(harness.ClubId, 60, harness.UserId, "Participant");
 
         await action.Should()
             .ThrowAsync<ResourceNotFoundException>()
@@ -288,11 +332,13 @@ public class ClubDiscussionServiceTests
     public async Task DeleteAsync_ShouldThrowNotFound_WhenDiscussionBelongsToAnotherClub()
     {
         var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: false, isMember: true);
         harness.DiscussionRepositoryMock
             .Setup(repo => repo.GetByIdAsync(61))
             .ReturnsAsync(new ClubDiscussion { Id = 61, ClubId = 999, UserId = harness.UserId });
 
-        var action = () => harness.Service.DeleteAsync(harness.ClubId, 61, harness.UserId);
+        var action = () => harness.Service.DeleteAsync(harness.ClubId, 61, harness.UserId, "Participant");
 
         await action.Should()
             .ThrowAsync<ResourceNotFoundException>()
@@ -300,24 +346,59 @@ public class ClubDiscussionServiceTests
     }
 
     [Fact]
-    public async Task DeleteAsync_ShouldThrow_WhenDiscussionBelongsToAnotherUser()
+    public async Task DeleteAsync_ShouldThrow_WhenAMemberDeletesSomeoneElsesDiscussion()
     {
         var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: false, isMember: true);
         harness.DiscussionRepositoryMock
             .Setup(repo => repo.GetByIdAsync(62))
-            .ReturnsAsync(new ClubDiscussion { Id = 62, ClubId = harness.ClubId, UserId = harness.OtherUserId });
+            .ReturnsAsync(new ClubDiscussion { Id = 62, ClubId = harness.ClubId, UserId = harness.MemberAuthorId });
 
-        var action = () => harness.Service.DeleteAsync(harness.ClubId, 62, harness.UserId);
+        var action = () => harness.Service.DeleteAsync(harness.ClubId, 62, harness.UserId, "Participant", "Spam");
 
         await action.Should()
             .ThrowAsync<ForbiddenException>()
             .WithMessage("You are not allowed to delete this discussion.");
+        harness.DiscussionRepositoryMock.Verify(repo => repo.DeleteAsync(It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
-    public async Task DeleteAsync_ShouldDeleteDiscussion_WhenCallerIsTheAuthor()
+    public async Task DeleteAsync_ShouldRefuseAVolunteerRemovingTheOwnersDiscussion()
     {
         var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: true, isMember: false);
+        harness.DiscussionRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(64))
+            .ReturnsAsync(new ClubDiscussion { Id = 64, ClubId = harness.ClubId, UserId = harness.OtherUserId });
+
+        var action = () => harness.Service.DeleteAsync(harness.ClubId, 64, harness.UserId, "Volunteer", "Spam");
+
+        await action.Should().ThrowAsync<ForbiddenException>();
+        harness.ModerationLogMock.Verify(log => log.Stage(It.IsAny<ClubModerationAction>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldRefuseAnAuthorWhoNoLongerBelongsToTheClub()
+    {
+        var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+
+        var action = () => harness.Service.DeleteAsync(harness.ClubId, 65, harness.UserId, "Participant");
+
+        await action.Should()
+            .ThrowAsync<ForbiddenException>()
+            .WithMessage(ClubDiscussionService.ContributeForbiddenMessage);
+        harness.DiscussionRepositoryMock.Verify(repo => repo.DeleteAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldDeleteDiscussion_WhenCallerIsTheAuthor_WithoutLogging()
+    {
+        var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: false, isMember: true);
         harness.DiscussionRepositoryMock
             .Setup(repo => repo.GetByIdAsync(63))
             .ReturnsAsync(new ClubDiscussion { Id = 63, ClubId = harness.ClubId, UserId = harness.UserId });
@@ -325,9 +406,68 @@ public class ClubDiscussionServiceTests
             .Setup(repo => repo.DeleteAsync(63))
             .ReturnsAsync(true);
 
-        await harness.Service.DeleteAsync(harness.ClubId, 63, harness.UserId);
+        await harness.Service.DeleteAsync(harness.ClubId, 63, harness.UserId, "Participant");
 
         harness.DiscussionRepositoryMock.Verify(repo => repo.DeleteAsync(63), Times.Once);
+        harness.ModerationLogMock.Verify(log => log.Stage(It.IsAny<ClubModerationAction>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldRequireAReason_WhenStaffRemoveSomeoneElsesDiscussion()
+    {
+        var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: true, isMember: false);
+        harness.DiscussionRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(66))
+            .ReturnsAsync(new ClubDiscussion { Id = 66, ClubId = harness.ClubId, UserId = harness.MemberAuthorId });
+
+        var action = () => harness.Service.DeleteAsync(harness.ClubId, 66, harness.UserId, "Volunteer", " ");
+
+        await action.Should()
+            .ThrowAsync<BadRequestException>()
+            .WithMessage(ClubModeration.ReasonRequiredMessage);
+        harness.DiscussionRepositoryMock.Verify(repo => repo.DeleteAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldLogTheRemoval_WhenStaffRemoveAMembersDiscussion()
+    {
+        var harness = new ClubDiscussionServiceHarness();
+        harness.SetupClub(isPrivate: false);
+        harness.SetupMembership(isStaff: true, isMember: false);
+        harness.DiscussionRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(67))
+            .ReturnsAsync(new ClubDiscussion
+            {
+                Id = 67,
+                ClubId = harness.ClubId,
+                UserId = harness.MemberAuthorId,
+                Title = "Cheap watches"
+            });
+        harness.DiscussionRepositoryMock
+            .Setup(repo => repo.DeleteAsync(67))
+            .ReturnsAsync(true);
+        ClubModerationAction? staged = null;
+        harness.ModerationLogMock
+            .Setup(log => log.Stage(It.IsAny<ClubModerationAction>()))
+            .Callback((ClubModerationAction entry) => staged = entry);
+
+        await harness.Service.DeleteAsync(harness.ClubId, 67, harness.UserId, "Volunteer", "Spam");
+
+        harness.DiscussionRepositoryMock.Verify(repo => repo.DeleteAsync(67), Times.Once);
+        staged.Should().BeEquivalentTo(new
+        {
+            ClubId = harness.ClubId,
+            ActorUserId = harness.UserId,
+            ActorClubRole = ClubModerationRoles.Volunteer,
+            Action = ClubModerationActionTypes.Remove,
+            ContentType = ClubModerationContentTypes.Discussion,
+            ContentId = 67,
+            AuthorUserId = harness.MemberAuthorId,
+            ContentSnapshot = "Cheap watches",
+            Reason = "Spam",
+        });
     }
 
     private sealed class ClubDiscussionServiceHarness
@@ -336,17 +476,25 @@ public class ClubDiscussionServiceTests
         public Mock<IClubDiscussionRepository> DiscussionRepositoryMock { get; } = new();
         public FakeClubAuthorizer Access { get; } = new();
         public Mock<IUserRepository> UserRepositoryMock { get; } = new();
+        public Mock<IClubModerationLog> ModerationLogMock { get; } = new();
 
         public int ClubId => 7;
         public int UserId => 11;
+
+        /// <summary>The club's owner.</summary>
         public int OtherUserId => 12;
+
+        /// <summary>A member with no staff role.</summary>
+        public int MemberAuthorId => 13;
 
         public ClubDiscussionServiceHarness()
         {
             Service = new ClubDiscussionService(
                 DiscussionRepositoryMock.Object,
                 Access,
-                UserRepositoryMock.Object);
+                UserRepositoryMock.Object,
+                ModerationLogMock.Object);
+            Access.Member(ClubId, MemberAuthorId);
         }
 
         public void SetupClub(bool isPrivate) => Access.Club(ClubId, isPrivate, ownerId: OtherUserId);

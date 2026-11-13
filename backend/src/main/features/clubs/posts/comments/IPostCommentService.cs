@@ -10,8 +10,12 @@ public interface IPostCommentService
         int clubId, int postId, int? parentCommentId, int userId, string? userRole, string content);
     Task<PostCommentView> UpdateAsync(
         int clubId, int postId, int commentId, int userId, string? userRole, string content);
+    /// <summary>
+    /// Soft-deletes a comment: its author, staff who outrank the author, or an admin. Removing
+    /// someone else's comment needs a reason and is logged.
+    /// </summary>
     Task<PostCommentView> DeleteAsync(
-        int clubId, int postId, int commentId, int userId, string? userRole);
+        int clubId, int postId, int commentId, int userId, string? userRole, string? reason = null);
     Task<PostCommentReactionSummary> SetReactionAsync(
         int clubId, int postId, int commentId, int userId, string? userRole,
         PostCommentReactionType reaction);

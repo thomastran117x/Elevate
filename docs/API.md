@@ -231,6 +231,23 @@ Email availability uses `POST /api/auth/email/availability` with CSRF and `{ "em
 
 ## Club moderation
 
+Club staff rank runs owner, then manager, then volunteer. The [authorization guide](AUTHORIZATION.md#moderation) has the full rules.
+
+- **Posts.**
+  - Any staff member can create a post.
+  - Authors edit or delete their own post while they are still staff.
+  - Managers, the owner and admins can edit or delete any post.
+  - Pinning or unpinning a post, including creating a pinned one, is limited to managers, the owner and admins. A volunteer gets `403`.
+- **Discussions, replies, comments and reviews.**
+  - Authors edit and delete their own.
+  - Staff who outrank the author in that club, and admins, can remove them but not edit them.
+  - Discussion edits and deletes need club membership (`club.contribute`), so a member who left or was removed gets `403`.
+- **Reasons.**
+  - Removing someone else's content requires a `reason` query parameter, for example `DELETE /api/clubs/{clubId}/posts/{id}?reason=Spam`.
+  - When it is missing or blank, the API answers `400`.
+  - `PUT /api/clubs/{clubId}/posts/{id}` accepts an optional `moderationReason` in the body.
+  - Reasons are plain text of up to 500 characters and follow the [human-authored text](#human-authored-request-text) rules.
+
 `GET /api/clubs/{clubId}/moderation-log?page=&pageSize=` lists a club's moderation actions, newest first, as a paged response. It is open to the club's managers, its owner, and admins (`club.manage`). Each item has these fields:
 
 - `action`: `remove`, `edit`, `pin` or `unpin`;

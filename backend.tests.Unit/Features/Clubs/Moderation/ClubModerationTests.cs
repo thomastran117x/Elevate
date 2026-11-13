@@ -106,6 +106,16 @@ public class ClubModerationTests
     }
 
     [Fact]
+    public void OptionalReason_ShouldApplyThePlainTextPolicy_AndNormalizeLineEndings()
+    {
+        ClubModeration.OptionalReason(" Spam\r\nRepeated ").Should().Be("Spam\nRepeated");
+
+        var act = () => ClubModeration.OptionalReason("<b>Spam</b>");
+
+        act.Should().Throw<BadRequestException>().WithMessage(ClubModeration.ReasonInvalidMessage);
+    }
+
+    [Fact]
     public void Entry_ShouldRecordTheActionAndTruncateTheSnapshot()
     {
         var content = ContentBy(MemberId);

@@ -7039,6 +7039,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -7388,6 +7392,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -7764,6 +7772,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -9257,6 +9269,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -9521,6 +9537,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -17622,6 +17642,11 @@ components:
           $ref: '#/components/schemas/PostType'
         isPinned:
           $ref: '#/components/schemas/Boolean'
+        moderationReason:
+          oneOf:
+            - type: 'null'
+            - description: Why a moderator changed someone else's post; recorded in the moderation log.
+              $ref: '#/components/schemas/String'
     ClubResponse:
       required:
         - id

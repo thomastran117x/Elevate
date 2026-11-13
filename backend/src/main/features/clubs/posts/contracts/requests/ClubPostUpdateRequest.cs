@@ -19,6 +19,14 @@ namespace backend.main.features.clubs.posts.contracts.requests
         public PostType PostType { get; set; } = PostType.General;
 
         public bool IsPinned { get; set; } = false;
+
+        /// <summary>Why a moderator changed someone else's post; recorded in the moderation log.</summary>
+        [RequestText(RequestTextKind.HumanMultiline)]
+        [StringLength(500)]
+        public string? ModerationReason
+        {
+            get; set;
+        }
     }
 }
 

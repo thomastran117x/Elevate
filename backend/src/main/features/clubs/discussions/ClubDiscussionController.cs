@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace backend.main.features.clubs.discussions
 {
     /// <summary>
-    /// Member-authored club discussion topics: creation, listing, and author-owned editing.
+    /// Member-authored club discussion topics: creation, listing, author-owned editing, and moderation.
     /// </summary>
     [ApiController]
     [FeatureGate(FeatureFlagKeys.ClubsDiscussions)]
@@ -93,6 +93,7 @@ namespace backend.main.features.clubs.discussions
 
         [Authorize]
         [HttpPut("{clubId}/discussions/{discussionId}")]
+        [RequirePermission(PermissionNames.ClubContribute, "clubId", DenialMessage = ClubDiscussionService.ContributeForbiddenMessage)]
         [ProducesResponseType(typeof(ApiResponse<ClubDiscussionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateDiscussion(
             int clubId,
@@ -105,6 +106,7 @@ namespace backend.main.features.clubs.discussions
                 clubId: clubId,
                 discussionId: discussionId,
                 userId: userPayload.Id,
+                userRole: userPayload.Role,
                 title: request.Title,
                 description: request.Description
             );
@@ -120,12 +122,13 @@ namespace backend.main.features.clubs.discussions
 
         [Authorize]
         [HttpDelete("{clubId}/discussions/{discussionId}")]
+        [RequirePermission(PermissionNames.ClubContribute, "clubId", DenialMessage = ClubDiscussionService.ContributeForbiddenMessage)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> DeleteDiscussion(int clubId, int discussionId)
+        public async Task<IActionResult> DeleteDiscussion(int clubId, int discussionId, [FromQuery] string? reason = null)
         {
             var userPayload = User.GetUserPayload();
 
-            await _discussionService.DeleteAsync(clubId, discussionId, userPayload.Id);
+            await _discussionService.DeleteAsync(clubId, discussionId, userPayload.Id, userPayload.Role, reason);
 
             return StatusCode(
                 200,
