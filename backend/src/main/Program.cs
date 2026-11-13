@@ -4,6 +4,7 @@ using backend.main.application.features;
 using backend.main.application.handlers;
 using backend.main.application.openapi;
 using backend.main.application.security;
+using backend.main.application.security.authorization;
 using backend.main.application.telemetry;
 using backend.main.features.auth.events;
 using backend.main.features.cache;
@@ -52,6 +53,7 @@ builder.Services
     .AddControllersWithViews(options =>
     {
         options.Conventions.Insert(0, new RoutePrefixConvention(RoutePaths.ApiPrefix));
+        options.Filters.Add<ResourcePermissionActionFilter>();
     })
     .AddJsonOptions(options => RequestTextJsonMetadata.Configure(options.JsonSerializerOptions));
 builder.Services.AddApiResponseConventions();
@@ -59,6 +61,7 @@ builder.Services.AddAppOpenApi();
 builder.Services.AddSignalR(options =>
 {
     options.AddFilter<ClubRealtimeExceptionFilter>();
+    options.AddFilter<ResourcePermissionHubFilter>();
 });
 builder.Services.AddSingleton<ClubRealtimeExceptionFilter>();
 

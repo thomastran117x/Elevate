@@ -20,6 +20,9 @@ public enum EndpointAccess
 
 public sealed record AuditedEndpoint(string Key, EndpointAccess Access);
 
+/// <summary>An audited endpoint together with the type and method that declare it.</summary>
+public sealed record DeclaredEndpoint(string Key, EndpointAccess Access, Type Type, MethodInfo Method);
+
 /// <summary>
 /// Classifies each action of the given MVC controllers and each method of the given SignalR hubs
 /// by its authorization metadata, resolved the way ASP.NET Core combines class and action attributes.
@@ -33,10 +36,14 @@ public static class EndpointAuthorizationAudit
         typeof(AuthController).Assembly.GetTypes().Where(type =>
             ControllerDiscovery.IsDiscoverable(type) || typeof(Hub).IsAssignableFrom(type));
 
-    public static IReadOnlyList<AuditedEndpoint> Audit(IEnumerable<Type> types)
+    public static IReadOnlyList<AuditedEndpoint> Audit(IEnumerable<Type> types) =>
+        Declare(types).Select(endpoint => new AuditedEndpoint(endpoint.Key, endpoint.Access)).ToArray();
+
+    /// <summary>Every endpoint with the method that implements it, keyed as <see cref="Audit"/> keys them.</summary>
+    public static IReadOnlyList<DeclaredEndpoint> Declare(IEnumerable<Type> types)
     {
         var candidates = types.ToArray();
-        var endpoints = new List<AuditedEndpoint>();
+        var endpoints = new List<DeclaredEndpoint>();
 
         foreach (var controller in candidates.Where(IsController))
             endpoints.AddRange(AuditController(controller));
@@ -47,7 +54,7 @@ public static class EndpointAuthorizationAudit
         return endpoints;
     }
 
-    private static IEnumerable<AuditedEndpoint> AuditController(Type controller)
+    private static IEnumerable<DeclaredEndpoint> AuditController(Type controller)
     {
         var classTemplate = controller.GetCustomAttributes<RouteAttribute>(inherit: true)
             .Select(route => route.Template)
@@ -60,19 +67,19 @@ public static class EndpointAuthorizationAudit
 
             if (routes.Length == 0)
             {
-                yield return new AuditedEndpoint($"ANY {CombineRoute(classTemplate, null)} ({action.Name})", access);
+                yield return new DeclaredEndpoint($"ANY {CombineRoute(classTemplate, null)} ({action.Name})", access, controller, action);
                 continue;
             }
 
             foreach (var route in routes)
             {
                 foreach (var verb in route.HttpMethods)
-                    yield return new AuditedEndpoint($"{verb} {CombineRoute(classTemplate, route.Template)}", access);
+                    yield return new DeclaredEndpoint($"{verb} {CombineRoute(classTemplate, route.Template)}", access, controller, action);
             }
         }
     }
 
-    private static IEnumerable<AuditedEndpoint> AuditHub(Type hub)
+    private static IEnumerable<DeclaredEndpoint> AuditHub(Type hub)
     {
         var methods = hub.GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .Where(method => !method.IsSpecialName
@@ -81,7 +88,7 @@ public static class EndpointAuthorizationAudit
                 && !method.DeclaringType.IsAssignableFrom(typeof(Hub))
                 && method.GetBaseDefinition().DeclaringType != typeof(Hub));
 
-        return methods.Select(method => new AuditedEndpoint($"HUB {hub.Name}.{method.Name}", Classify(hub, method)));
+        return methods.Select(method => new DeclaredEndpoint($"HUB {hub.Name}.{method.Name}", Classify(hub, method), hub, method));
     }
 
     private static EndpointAccess Classify(Type type, MethodInfo method)
