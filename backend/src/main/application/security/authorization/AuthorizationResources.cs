@@ -64,3 +64,14 @@ public sealed record AuthoredContentResource(string ContentType, int ContentId, 
     public ResourceKind Kind => ResourceKind.AuthoredContent;
     public string NotFoundMessage => $"{ContentType} with ID {ContentId} was not found.";
 }
+
+/// <summary>
+/// Content in a club that the service has already loaded and matched to the club (a post,
+/// discussion, reply, comment or review). The evaluator reads the club, the caller's and the
+/// author's staff roles from the database, so moderation follows the current ranks.
+/// </summary>
+public sealed record ClubContentResource(int ClubId, string ContentType, int ContentId, int AuthorUserId) : IAuthorizationResource
+{
+    public ResourceKind Kind => ResourceKind.ClubContent;
+    public string NotFoundMessage => $"Club {ClubId} not found";
+}

@@ -18,6 +18,7 @@ internal static class TestResourceAuthorizers
         services.AddKeyedSingleton<IResourcePermissionEvaluator, ClubPermissionEvaluator>(ResourceKind.Club);
         services.AddKeyedSingleton<IResourcePermissionEvaluator, UserPermissionEvaluator>(ResourceKind.User);
         services.AddKeyedSingleton<IResourcePermissionEvaluator, AuthoredContentPermissionEvaluator>(ResourceKind.AuthoredContent);
+        services.AddKeyedSingleton<IResourcePermissionEvaluator, ClubContentPermissionEvaluator>(ResourceKind.ClubContent);
         return new ResourceAuthorizer(services.BuildServiceProvider());
     }
 }

@@ -83,6 +83,70 @@ public sealed class ClubRelationshipResolver
         return new ClubRelationship(clubId, club.isPrivate, held);
     }
 
+    /// <summary>
+    /// Resolves the caller's relationships to content in a club. Returns <c>null</c> when the club
+    /// does not exist. The caller holds <see cref="Author"/> when they wrote the content, and
+    /// <see cref="SeniorStaff"/> when their staff rank in the club is above the author's. Staff
+    /// roles are read only when <paramref name="relevant"/> needs them and nothing relevant is
+    /// already held.
+    /// </summary>
+    public async Task<ClubRelationship?> ResolveContentAsync(
+        ResourceActor actor,
+        int clubId,
+        int authorUserId,
+        ResourceRelationship relevant,
+        CancellationToken cancellationToken = default)
+    {
+        var club = await _db.Clubs
+            .AsNoTracking()
+            .Where(entry => entry.Id == clubId)
+            .Select(entry => new { entry.UserId, entry.isPrivate })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (club is null)
+            return null;
+
+        var held = actor.BaseRelationships();
+        if (actor.UserId is not int userId)
+            return new ClubRelationship(clubId, club.isPrivate, held);
+
+        if (userId == authorUserId)
+            held |= Author;
+
+        if ((held & relevant) != 0 || (relevant & (ResourceRelationship.ClubStaff | SeniorStaff)) == 0)
+            return new ClubRelationship(clubId, club.isPrivate, held);
+
+        var roles = await _db.ClubStaff
+            .AsNoTracking()
+            .Where(staff => staff.ClubId == clubId && (staff.UserId == userId || staff.UserId == authorUserId))
+            .Select(staff => new { staff.UserId, staff.Role })
+            .ToListAsync(cancellationToken);
+
+        int RankOf(int candidate) => candidate == club.UserId
+            ? 3
+            : roles.Where(role => role.UserId == candidate)
+                .Select(role => role.Role switch
+                {
+                    ClubStaffRole.Manager => 2,
+                    ClubStaffRole.Volunteer => 1,
+                    _ => 0,
+                })
+                .DefaultIfEmpty(0)
+                .Max();
+
+        var callerRank = RankOf(userId);
+        held |= callerRank switch
+        {
+            3 => Owner,
+            2 => Manager,
+            1 => Volunteer,
+            _ => None,
+        };
+        if (callerRank > RankOf(authorUserId))
+            held |= SeniorStaff;
+
+        return new ClubRelationship(clubId, club.isPrivate, held);
+    }
+
     /// <summary>The relationships that can satisfy <paramref name="permission"/> on a club that is (or is not) public.</summary>
     public static Func<bool, ResourceRelationship> RelevantTo(Permission permission) =>
         isPublic => permission.Allowed | (isPublic ? permission.AllowedWhenPublic : None);
