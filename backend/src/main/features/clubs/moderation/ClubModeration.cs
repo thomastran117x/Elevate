@@ -32,10 +32,7 @@ public static class ClubModeration
         PermissionMessages? messages = null,
         CancellationToken cancellationToken = default)
     {
-        var decision = await authorizer.EvaluateAsync(actor, permission, content, cancellationToken);
-        if (!decision.IsAllowed)
-            throw PermissionDenialErrors.For(permission, content, actor, decision, messages);
-
+        var decision = await authorizer.EnsureAsync(actor, permission, content, messages, cancellationToken);
         return new ModerationDecision(actor.UserId != content.AuthorUserId, RoleOf(actor, decision.Held));
     }
 

@@ -72,9 +72,10 @@ public static class ResourceAuthorizerExtensions
     /// Throws the API's usual error for a refusal: <see cref="ResourceNotFoundException"/> for a
     /// missing or hidden resource, <see cref="UnauthorizedException"/> for an anonymous caller of
     /// a <see cref="PermissionDenial.ChallengeAnonymous"/> permission, otherwise
-    /// <see cref="ForbiddenException"/>.
+    /// <see cref="ForbiddenException"/>. Returns the allowing decision, whose
+    /// <see cref="PermissionDecision.Held"/> relationships say in what capacity the caller passed.
     /// </summary>
-    public static async Task EnsureAsync(
+    public static async Task<PermissionDecision> EnsureAsync(
         this IResourceAuthorizer authorizer,
         ResourceActor actor,
         Permission permission,
@@ -84,7 +85,7 @@ public static class ResourceAuthorizerExtensions
     {
         var decision = await authorizer.EvaluateAsync(actor, permission, resource, cancellationToken);
         if (decision.IsAllowed)
-            return;
+            return decision;
 
         throw PermissionDenialErrors.For(permission, resource, actor, decision, messages);
     }
