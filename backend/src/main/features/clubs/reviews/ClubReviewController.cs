@@ -110,11 +110,11 @@ namespace backend.main.features.clubs.reviews
         [Authorize]
         [HttpDelete("{clubId}/reviews/{reviewId}")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> DeleteReview(int clubId, int reviewId)
+        public async Task<IActionResult> DeleteReview(int clubId, int reviewId, [FromQuery] string? reason = null)
         {
             var userPayload = User.GetUserPayload();
 
-            await _reviewService.DeleteReviewAsync(clubId, reviewId, userPayload.Id);
+            await _reviewService.DeleteReviewAsync(clubId, reviewId, userPayload.Id, userPayload.Role, reason);
 
             return StatusCode(
                 200,

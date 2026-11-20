@@ -71,10 +71,15 @@ export class ClubDiscussionsService {
       .pipe(map((response) => this.mapDiscussion(response)));
   }
 
-  deleteDiscussion(clubId: number, discussionId: number): Observable<ApiEnvelope<unknown>> {
+  /** `reason` is required by the server when the caller is removing someone else's discussion. */
+  deleteDiscussion(
+    clubId: number,
+    discussionId: number,
+    reason?: string,
+  ): Observable<ApiEnvelope<unknown>> {
     return this.api.delete<ApiEnvelope<unknown>>(
       `${this.base}/${clubId}/discussions/${discussionId}`,
-      { withCredentials: true },
+      { withCredentials: true, ...(reason ? { params: { reason } } : {}) },
     );
   }
 

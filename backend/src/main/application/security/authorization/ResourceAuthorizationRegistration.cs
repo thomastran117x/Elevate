@@ -28,6 +28,7 @@ public static class ResourceAuthorizationRegistration
         services.AddKeyedScoped<IResourcePermissionEvaluator, MediaAssetPermissionEvaluator>(ResourceKind.MediaAsset);
         services.AddKeyedSingleton<IResourcePermissionEvaluator, UserPermissionEvaluator>(ResourceKind.User);
         services.AddKeyedSingleton<IResourcePermissionEvaluator, AuthoredContentPermissionEvaluator>(ResourceKind.AuthoredContent);
+        services.AddKeyedScoped<IResourcePermissionEvaluator, ClubContentPermissionEvaluator>(ResourceKind.ClubContent);
 
         return services;
     }

@@ -94,10 +94,11 @@ public sealed class PostCommentController : ControllerBase
     [HttpDelete("{clubId}/posts/{postId}/comments/{commentId}")]
     [RequirePermission(PermissionNames.ClubParticipate, "clubId", DenialMessage = PostCommentService.ParticipateForbiddenMessage)]
     [ProducesResponseType(typeof(ApiResponse<PostCommentResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> DeleteComment(int clubId, int postId, int commentId)
+    public async Task<IActionResult> DeleteComment(
+        int clubId, int postId, int commentId, [FromQuery] string? reason = null)
     {
         var user = User.GetUserPayload();
-        var view = await _commentService.DeleteAsync(clubId, postId, commentId, user.Id, user.Role);
+        var view = await _commentService.DeleteAsync(clubId, postId, commentId, user.Id, user.Role, reason);
         var response = MapComment(view);
         await _notifier.CommentDeletedAsync(clubId, postId, response);
         return Ok(new ApiResponse<PostCommentResponse>("Comment deleted successfully.", response));

@@ -570,7 +570,7 @@ describe('ClubDetailComponent', () => {
 
       component.deleteReview(makeReview({ id: 4 }));
 
-      expect(reviews.deleteReview).toHaveBeenCalledOnceWith(3, 4);
+      expect(reviews.deleteReview).toHaveBeenCalledOnceWith(3, 4, undefined);
       expect(reviews.getReviews).toHaveBeenCalledTimes(1);
       expect(clubs.getClub).toHaveBeenCalledTimes(1);
       expect(component.reviewDeletingId).toBeNull();
@@ -599,6 +599,37 @@ describe('ClubDetailComponent', () => {
     it('allows editing only the signed-in user’s own review', () => {
       expect(component.canEditReview(makeReview({ userId: 1 }))).toBeTrue();
       expect(component.canEditReview(makeReview({ userId: 5 }))).toBeFalse();
+    });
+
+    it('offers removal of other people’s reviews to club staff only', () => {
+      expect(component.canRemoveReview(makeReview({ userId: 5 }))).toBeFalse();
+
+      component.club = makeClub({ id: 3, isManager: true });
+
+      expect(component.canRemoveReview(makeReview({ userId: 5 }))).toBeTrue();
+      expect(component.canRemoveReview(makeReview({ userId: 1 }))).toBeFalse();
+    });
+
+    it('removes a review with the moderator’s reason', () => {
+      reviews.deleteReview.and.returnValue(of(envelope(null)));
+      component.club = makeClub({ id: 3, isManager: true });
+      component.openRemoveReview(makeReview({ id: 9, userId: 5 }));
+      component.reviewRemovalReason = ' Abusive ';
+
+      component.resolveRemoveReview(true);
+
+      expect(reviews.deleteReview).toHaveBeenCalledOnceWith(3, 9, 'Abusive');
+      expect(component.removingReview).toBeNull();
+      expect(component.reviewRemovalBusy).toBeFalse();
+    });
+
+    it('keeps the review when the removal dialog is dismissed', () => {
+      component.openRemoveReview(makeReview({ id: 9, userId: 5 }));
+
+      component.resolveRemoveReview(false);
+
+      expect(reviews.deleteReview).not.toHaveBeenCalled();
+      expect(component.removingReview).toBeNull();
     });
   });
 

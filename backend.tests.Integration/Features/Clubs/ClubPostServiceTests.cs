@@ -1,6 +1,7 @@
 using backend.main.features.cache;
 using backend.main.features.clubs;
 using backend.main.features.clubs.follow;
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
@@ -23,26 +24,54 @@ namespace backend.tests.Clubs;
 public class ClubPostServiceTests
 {
     [Fact]
-    public async Task Volunteer_ShouldBeAbleToUpdateAndDeleteClubPosts()
+    public async Task Volunteer_ShouldNotUpdateOrDeleteTheOwnersPost()
     {
         await using var harness = await ClubPostServiceHarness.CreateAsync(isPrivate: false);
         var post = await harness.SeedPostAsync(userId: 7, title: "Owner post");
 
+        var update = () => harness.Service.UpdateAsync(
+            4, post.Id, 66, "Participant", "Volunteer updated", "Updated by volunteer", PostType.General, false);
+        var delete = () => harness.Service.DeleteAsync(4, post.Id, 66, "Participant", "Outdated");
+
+        await update.Should().ThrowAsync<ForbiddenException>().WithMessage(ClubPostService.UpdateForbiddenMessage);
+        await delete.Should().ThrowAsync<ForbiddenException>().WithMessage(ClubPostService.DeleteForbiddenMessage);
+        (await harness.Db.ClubPosts.AnyAsync(p => p.Id == post.Id)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Volunteer_ShouldUpdateAndDeleteTheirOwnPost_WithoutModerationEntries()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync(isPrivate: false);
+        var post = await harness.SeedPostAsync(userId: 66, title: "Volunteer post");
+
         var updated = await harness.Service.UpdateAsync(
-            4,
-            post.Id,
-            66,
-            "Participant",
-            "Volunteer updated",
-            "Updated by volunteer",
-            PostType.General,
-            false);
-
-        updated.Title.Should().Be("Volunteer updated");
-
+            4, post.Id, 66, "Participant", "Volunteer updated", "Updated by volunteer", PostType.General, false);
         await harness.Service.DeleteAsync(4, post.Id, 66, "Participant");
 
+        updated.Title.Should().Be("Volunteer updated");
         (await harness.Db.ClubPosts.AnyAsync(p => p.Id == post.Id)).Should().BeFalse();
+        (await harness.Db.ClubModerationActions.AnyAsync()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Manager_ShouldModerateTheOwnersPost_AndRecordEachActionWithTheChange()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync(isPrivate: false);
+        var post = await harness.SeedPostAsync(userId: 7, title: "Owner post");
+
+        await harness.Service.UpdateAsync(
+            4, post.Id, 55, "Participant", "Owner post", "content", PostType.General, true);
+        await harness.Service.DeleteAsync(4, post.Id, 55, "Participant", "Event cancelled");
+
+        (await harness.Db.ClubPosts.AnyAsync(p => p.Id == post.Id)).Should().BeFalse();
+        var entries = await harness.Db.ClubModerationActions.AsNoTracking().OrderBy(entry => entry.Id).ToListAsync();
+        entries.Select(entry => entry.Action).Should().Equal(ClubModerationActionTypes.Pin, ClubModerationActionTypes.Remove);
+        entries.Should().OnlyContain(entry =>
+            entry.ActorUserId == 55
+            && entry.ActorClubRole == ClubModerationRoles.Manager
+            && entry.AuthorUserId == 7
+            && entry.ContentId == post.Id);
+        entries[1].Reason.Should().Be("Event cancelled");
     }
 
     [Fact]
@@ -142,16 +171,18 @@ public class ClubPostServiceTests
                 .Setup(r => r.GetByIdsAsync(It.IsAny<IEnumerable<int>>(), It.IsAny<backend.main.features.profile.contracts.UserReadDetailLevel>()))
                 .ReturnsAsync([]);
 
+            // The production club rules over the seeded owner, manager and volunteer.
+            var authorizer = TestResourceAuthorizers.Over(db);
             var service = new ClubPostService(
                 db,
                 new ClubPostRepository(db),
                 new PostCommentRepository(db),
-                // The production club rules over the seeded owner, manager and volunteer.
-                TestResourceAuthorizers.Over(db),
+                authorizer,
                 Mock.Of<IClubPostSearchService>(),
                 outboxWriter.Object,
                 userRepository.Object,
-                refreshCache.Object);
+                refreshCache.Object,
+                new ClubModerationLog(db, authorizer));
 
             return new ClubPostServiceHarness(database, db, service);
         }

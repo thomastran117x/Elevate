@@ -110,6 +110,15 @@ function normalizeClubType(value: string | undefined): ClubType {
   return CLUB_TYPES.includes(value as ClubType) ? (value as ClubType) : 'Other';
 }
 
+/**
+ * Frontend mirror of the server's staff check: owner, manager, volunteer, or an admin (who
+ * carries no per-club flag but always has `canManage`). Used to offer moderation controls; the
+ * server still decides each action by rank.
+ */
+export function isClubStaff(club: Club | null): boolean {
+  return !!club && (club.isOwner || club.isManager || club.isVolunteer || club.canManage);
+}
+
 export function normalizeClub(raw: ClubPayload): Club {
   return {
     id: raw.id ?? raw.Id ?? 0,

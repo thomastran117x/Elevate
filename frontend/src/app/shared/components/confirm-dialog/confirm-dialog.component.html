@@ -60,6 +60,22 @@
         </label>
       }
 
+      @if (reasonLabel) {
+        <label class="mt-5 block">
+          <span class="block text-xs font-semibold text-subtle">{{ reasonLabel }}</span>
+          <textarea
+            name="reason"
+            rows="3"
+            required
+            [attr.maxlength]="reasonMaxLength"
+            [ngModel]="reason"
+            (ngModelChange)="onReasonInput($event)"
+            [disabled]="busy"
+            class="mt-2 w-full rounded-2xl border border-line bg-glass-strong px-4 py-3 text-base text-content placeholder:text-faint outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15"
+          ></textarea>
+        </label>
+      }
+
       <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <button
           #cancelButton

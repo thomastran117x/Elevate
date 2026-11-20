@@ -15,7 +15,12 @@ namespace backend.main.features.clubs.reviews
             GetClubReviewsAsync(int clubId, int page, int pageSize);
         Task<List<ClubReview>> GetReviewsByUserAsync(int userId, int page, int pageSize);
         Task<ClubReview> UpdateReviewAsync(int clubId, int reviewId, int userId, string title, int rating, string? comment);
-        Task DeleteReviewAsync(int clubId, int reviewId, int userId);
+
+        /// <summary>
+        /// Deletes a review: its author, staff who outrank the author, or an admin. Removing
+        /// someone else's review needs a reason and is logged.
+        /// </summary>
+        Task DeleteReviewAsync(int clubId, int reviewId, int userId, string? userRole, string? reason = null);
     }
 }
 

@@ -1,0 +1,77 @@
+<article
+  class="rounded-3xl border border-line bg-glass px-6 py-6 backdrop-blur-xl"
+  aria-labelledby="moderation-log-heading"
+>
+  <div class="mb-4">
+    <h2 id="moderation-log-heading" class="text-xl font-bold">Moderation log</h2>
+    <p class="text-sm text-subtle">
+      Every time staff or an admin changes or removes someone else's post, discussion, reply,
+      comment or review, it is recorded here with the reason given.
+    </p>
+  </div>
+
+  @if (error()) {
+    <div
+      role="alert"
+      class="rounded-2xl border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger"
+    >
+      {{ error() }}
+    </div>
+  } @else if (loading()) {
+    <div
+      class="rounded-2xl border border-line bg-glass px-5 py-8 text-center text-sm text-faint"
+      aria-live="polite"
+    >
+      Loading moderation log…
+    </div>
+  } @else if (items().length === 0) {
+    <div class="rounded-2xl border border-line bg-glass px-5 py-8 text-center text-sm text-subtle">
+      No moderation actions yet.
+    </div>
+  } @else {
+    <ul class="divide-y divide-line">
+      @for (item of items(); track item.id) {
+        <li class="py-3">
+          <p class="font-semibold text-content">
+            {{ summary(item) }}
+            <span class="font-normal text-faint">by {{ partyName(item.author) }}</span>
+          </p>
+          @if (item.contentSnapshot) {
+            <p class="mt-1 line-clamp-2 text-sm text-muted">“{{ item.contentSnapshot }}”</p>
+          }
+          @if (item.reason) {
+            <p class="mt-1 text-sm text-content">
+              <span class="font-semibold text-subtle">Reason:</span> {{ item.reason }}
+            </p>
+          }
+          <p class="mt-1 text-xs text-faint">
+            {{ item.createdAt | date: 'medium' }} · {{ partyName(item.actor) }} ·
+            {{ item.actorClubRole }}
+          </p>
+        </li>
+      }
+    </ul>
+
+    @if (totalPages() > 1) {
+      <nav class="mt-4 flex items-center justify-center gap-2" aria-label="Moderation log pages">
+        <button
+          type="button"
+          (click)="goToPage(page() - 1)"
+          [disabled]="page() === 1"
+          class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+        >
+          Previous
+        </button>
+        <span class="text-xs text-faint">Page {{ page() }} of {{ totalPages() }}</span>
+        <button
+          type="button"
+          (click)="goToPage(page() + 1)"
+          [disabled]="page() === totalPages()"
+          class="rounded-2xl border border-line-strong px-3 py-2 text-xs font-semibold text-muted transition hover:bg-glass-strong disabled:opacity-40"
+        >
+          Next
+        </button>
+      </nav>
+    }
+  }
+</article>

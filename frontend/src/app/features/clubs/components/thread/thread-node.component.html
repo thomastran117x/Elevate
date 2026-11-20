@@ -135,24 +135,43 @@
                     Delete
                   </button>
                 }
+              } @else if (canRemoveAsModerator && !node.deleteConfirm) {
+                <button
+                  type="button"
+                  (click)="node.deleteConfirm = true"
+                  class="cursor-pointer text-danger"
+                >
+                  Remove
+                </button>
               }
             </span>
 
             @if (node.deleteConfirm) {
-              <span class="flex items-center gap-2">
+              <span class="flex flex-wrap items-center gap-2">
                 <span class="text-subtle">{{ labels.deleteConfirm }}</span>
+                @if (!isOwn) {
+                  <label class="flex items-center gap-2">
+                    <span class="sr-only">Reason for removal</span>
+                    <input
+                      type="text"
+                      [(ngModel)]="removalReason"
+                      (keydown.enter)="confirmDelete()"
+                      maxlength="500"
+                      required
+                      placeholder="Reason for removal"
+                      class="rounded-xl border border-line bg-glass-strong px-3 py-1 text-xs text-content placeholder:text-faint outline-none focus:border-accent"
+                    />
+                  </label>
+                }
                 <button
                   type="button"
-                  (click)="action.emit({ type: 'delete', node })"
-                  class="cursor-pointer font-semibold text-danger"
+                  (click)="confirmDelete()"
+                  [disabled]="node.busy || (!isOwn && !removalReason.trim())"
+                  class="cursor-pointer font-semibold text-danger disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Confirm
                 </button>
-                <button
-                  type="button"
-                  (click)="node.deleteConfirm = false"
-                  class="cursor-pointer text-faint"
-                >
+                <button type="button" (click)="cancelDelete()" class="cursor-pointer text-faint">
                   Cancel
                 </button>
               </span>
@@ -219,6 +238,7 @@
               [node]="child"
               [labels]="labels"
               [currentUser]="currentUser"
+              [canModerate]="canModerate"
               [depth]="depth + 1"
               [grouped]="isChildGrouped(i)"
               (action)="action.emit($event)"

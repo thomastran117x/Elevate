@@ -7039,6 +7039,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -7388,6 +7392,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -7764,6 +7772,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -7912,6 +7924,68 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ApiResponseOfPostCommentReactionResponse'
+        '400':
+          description: 'Bad request, validation failure, or CSRF failure.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '401':
+          description: Authentication is required or the access token is invalid/expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+        '403':
+          description: The authenticated user does not have permission to perform this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfObject'
+      security:
+        - bearerAuth: [ ]
+      x-authorization: authenticated
+  '/api/clubs/{clubId}/moderation-log':
+    get:
+      tags:
+        - clubs
+      summary: Get moderation log
+      operationId: ClubModeration_GetModerationLog_get
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Int32'
+        - name: page
+          in: query
+          schema:
+            default: 1
+            $ref: '#/components/schemas/Int32'
+        - name: pageSize
+          in: query
+          schema:
+            default: 20
+            $ref: '#/components/schemas/Int32'
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPagedResponseOfClubModerationLogItemResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPagedResponseOfClubModerationLogItemResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOfPagedResponseOfClubModerationLogItemResponse'
         '400':
           description: 'Bad request, validation failure, or CSRF failure.'
           content:
@@ -9195,6 +9269,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -9459,6 +9537,10 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/Int32'
+        - name: reason
+          in: query
+          schema:
+            $ref: '#/components/schemas/String'
       responses:
         '200':
           description: OK
@@ -15801,6 +15883,31 @@ components:
           description: Optional metadata such as pagination or response source details.
           $ref: '#/components/schemas/Object'
       description: Standard JSON envelope returned by all API endpoints.
+    ApiResponseOfPagedResponseOfClubModerationLogItemResponse:
+      type: object
+      properties:
+        success:
+          description: Indicates whether the request succeeded.
+          $ref: '#/components/schemas/Boolean'
+        message:
+          description: Human-readable message summarizing the outcome.
+          $ref: '#/components/schemas/String'
+        data:
+          oneOf:
+            - type: 'null'
+            - description: Endpoint-specific response payload.
+              $ref: '#/components/schemas/PagedResponseOfClubModerationLogItemResponse'
+          description: Endpoint-specific response payload. `null` on error responses.
+        error:
+          oneOf:
+            - type: 'null'
+            - description: Structured error details when the request fails.
+              $ref: '#/components/schemas/ApiError'
+          description: Structured error details. Present only when `success` is `false`.
+        meta:
+          description: Optional metadata such as pagination or response source details.
+          $ref: '#/components/schemas/Object'
+      description: Standard JSON envelope returned by all API endpoints.
     ApiResponseOfPagedResponseOfClubPostResponse:
       type: object
       properties:
@@ -17413,6 +17520,47 @@ components:
             - type: 'null'
             - $ref: '#/components/schemas/String'
       description: "A club member (follow record) enriched with the member's public profile\nfields. Profile fields are null when the referenced user no longer exists."
+    ClubModerationLogItemResponse:
+      required:
+        - id
+        - clubId
+        - action
+        - contentType
+        - contentId
+        - contentSnapshot
+        - reason
+        - actorClubRole
+        - actor
+        - author
+        - createdAt
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/Int32'
+        clubId:
+          $ref: '#/components/schemas/Int32'
+        action:
+          $ref: '#/components/schemas/String'
+        contentType:
+          $ref: '#/components/schemas/String'
+        contentId:
+          $ref: '#/components/schemas/Int32'
+        contentSnapshot:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+        reason:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/String'
+        actorClubRole:
+          $ref: '#/components/schemas/String'
+        actor:
+          $ref: '#/components/schemas/AuthorInfo'
+        author:
+          $ref: '#/components/schemas/AuthorInfo'
+        createdAt:
+          $ref: '#/components/schemas/DateTime'
     ClubOwnershipTransferRequest:
       type: object
       properties:
@@ -17434,6 +17582,7 @@ components:
         content:
           $ref: '#/components/schemas/String'
         postType:
+          description: Sent by the client as its name; the number is still accepted.
           $ref: '#/components/schemas/PostType'
         isPinned:
           $ref: '#/components/schemas/Boolean'
@@ -17491,9 +17640,15 @@ components:
         content:
           $ref: '#/components/schemas/String'
         postType:
+          description: Sent by the client as its name; the number is still accepted.
           $ref: '#/components/schemas/PostType'
         isPinned:
           $ref: '#/components/schemas/Boolean'
+        moderationReason:
+          oneOf:
+            - type: 'null'
+            - description: Why a moderator changed someone else's post; recorded in the moderation log.
+              $ref: '#/components/schemas/String'
     ClubResponse:
       required:
         - id
@@ -19461,6 +19616,10 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/ClubMemberResponse'
+    IEnumerableOfClubModerationLogItemResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/ClubModerationLogItemResponse'
     IEnumerableOfClubPostResponse:
       type: array
       items:
@@ -20178,6 +20337,30 @@ components:
         items:
           description: Items for the current page.
           $ref: '#/components/schemas/IEnumerableOfClubMemberResponse'
+        totalCount:
+          description: Total number of matching records.
+          $ref: '#/components/schemas/Int32'
+        page:
+          description: Current 1-based page number.
+          $ref: '#/components/schemas/Int32'
+        pageSize:
+          description: Requested page size.
+          $ref: '#/components/schemas/Int32'
+        totalPages:
+          description: Total number of available pages.
+          $ref: '#/components/schemas/Int32'
+      description: Standard pagination payload used inside API response envelopes.
+    PagedResponseOfClubModerationLogItemResponse:
+      required:
+        - items
+        - totalCount
+        - page
+        - pageSize
+      type: object
+      properties:
+        items:
+          description: Items for the current page.
+          $ref: '#/components/schemas/IEnumerableOfClubModerationLogItemResponse'
         totalCount:
           description: Total number of matching records.
           $ref: '#/components/schemas/Int32'

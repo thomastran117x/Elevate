@@ -54,6 +54,14 @@ public static class PermissionExpectations
             ["missing asset"] = new MediaAssetResource(Guid.Empty),
             ["member's account"] = new UserResource(UserId(Caller.Member)),
             ["member's content"] = new AuthoredContentResource("Reply", 1, UserId(Caller.Member)),
+            ["member's comment"] = new ClubContentResource(PublicClubId, "Comment", 1, UserId(Caller.Member)),
+            ["member's comment in private club"] = new ClubContentResource(PrivateClubId, "Comment", 2, UserId(Caller.Member)),
+            ["volunteer's comment"] = new ClubContentResource(PublicClubId, "Comment", 3, UserId(Caller.Volunteer)),
+            ["manager's comment"] = new ClubContentResource(PublicClubId, "Comment", 4, UserId(Caller.Manager)),
+            ["owner's comment"] = new ClubContentResource(PublicClubId, "Comment", 5, UserId(Caller.Owner)),
+            ["volunteer's post"] = new ClubContentResource(PublicClubId, "Post", 6, UserId(Caller.Volunteer)),
+            ["owner's post"] = new ClubContentResource(PublicClubId, "Post", 7, UserId(Caller.Owner)),
+            ["content in missing club"] = new ClubContentResource(MissingId, "Comment", 8, UserId(Caller.Member)),
         };
 
     private static readonly Caller[] Staff = [Caller.Volunteer, Caller.Manager, Caller.Owner, Caller.Admin];
@@ -121,8 +129,23 @@ public static class PermissionExpectations
 
         .. Grid(PermissionNames.UserSelfOrAdmin, "member's account", Expect.Forbid, allow: [Caller.Member, Caller.Admin]),
 
-        // Known deviation: no staff or admin moderation of authored content.
+        // Editing stays with the author: moderators remove content, they do not rewrite it.
         .. Grid(PermissionNames.ContentAuthor, "member's content", Expect.Forbid, allow: [Caller.Member]),
+
+        // Posts (#402): the author (who must also still hold club.staff), managers, the owner and
+        // admins. A volunteer cannot change a more senior author's post.
+        .. Grid(PermissionNames.PostManage, "volunteer's post", Expect.Forbid, allow: Staff),
+        .. Grid(PermissionNames.PostManage, "owner's post", Expect.Forbid, allow: Managers),
+        .. Grid(PermissionNames.PostManage, "content in missing club", Expect.NotFound),
+
+        // Removal (#402): the author, staff of a higher rank in that club, and admins. Another
+        // club's manager has no rank here.
+        .. Grid(PermissionNames.ContentRemove, "member's comment", Expect.Forbid, allow: MembersAndStaff),
+        .. Grid(PermissionNames.ContentRemove, "member's comment in private club", Expect.Forbid, allow: MembersAndStaff),
+        .. Grid(PermissionNames.ContentRemove, "volunteer's comment", Expect.Forbid, allow: Staff),
+        .. Grid(PermissionNames.ContentRemove, "manager's comment", Expect.Forbid, allow: Managers),
+        .. Grid(PermissionNames.ContentRemove, "owner's comment", Expect.Forbid, allow: [Caller.Owner, Caller.Admin]),
+        .. Grid(PermissionNames.ContentRemove, "content in missing club", Expect.NotFound),
     ];
 
     private static IEnumerable<Row> Grid(

@@ -62,9 +62,42 @@ internal sealed class FakeClubAuthorizer : IResourceAuthorizer
             case AuthoredContentResource:
                 return new AuthoredContentPermissionEvaluator().EvaluateAsync(actor, permission, resource, cancellationToken);
 
+            case ClubContentResource content:
+                if (!_clubs.TryGetValue(content.ClubId, out var contentClub))
+                    return Task.FromResult(PermissionDecision.NotFound);
+
+                var contentHeld = actor.BaseRelationships();
+                if (actor.UserId is int callerId)
+                {
+                    if (callerId == content.AuthorUserId)
+                        contentHeld |= ResourceRelationship.Author;
+                    var callerRank = RankOf(content.ClubId, contentClub.OwnerId, callerId);
+                    contentHeld |= callerRank switch
+                    {
+                        3 => ResourceRelationship.Owner,
+                        2 => ResourceRelationship.Manager,
+                        1 => ResourceRelationship.Volunteer,
+                        _ => ResourceRelationship.None,
+                    };
+                    if (callerRank > RankOf(content.ClubId, contentClub.OwnerId, content.AuthorUserId))
+                        contentHeld |= ResourceRelationship.SeniorStaff;
+                }
+
+                return Task.FromResult(PermissionDecision.Decide(permission, contentHeld, resourceIsPublic: !contentClub.IsPrivate));
+
             default:
                 throw new NotSupportedException($"{nameof(FakeClubAuthorizer)} does not model {resource.Kind} resources.");
         }
+    }
+
+    private int RankOf(int clubId, int? ownerId, int userId)
+    {
+        if (ownerId == userId)
+            return 3;
+        var held = _relationships.GetValueOrDefault((clubId, userId));
+        if (held.HasFlag(ResourceRelationship.Manager))
+            return 2;
+        return held.HasFlag(ResourceRelationship.Volunteer) ? 1 : 0;
     }
 
     private FakeClubAuthorizer Grant(int clubId, int userId, ResourceRelationship relationship)

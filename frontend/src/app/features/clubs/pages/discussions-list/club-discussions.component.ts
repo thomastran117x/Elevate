@@ -11,7 +11,7 @@ import { selectUser } from '../../../../core/stores/user.selectors';
 import { ClubDiscussionsService } from '../../services/club-discussions.service';
 import { ClubsService } from '../../services/clubs.service';
 import { ClubDiscussion, discussionAuthorName } from '../../models/club-discussion.types';
-import { Club } from '../../models/club.types';
+import { isClubStaff } from '../../models/club.types';
 import { ThreadComponent } from '../../components/thread/thread.component';
 import {
   ThreadDataSource,
@@ -19,16 +19,12 @@ import {
 } from '../../components/thread/thread-data-source';
 import { ThreadDisplayItem } from '../../components/thread/thread-item';
 import { DiscussionRepliesService } from '../../services/discussion-replies.service';
-
-/** Frontend mirror of the server's `HasClubStaffAccessAsync`: owner, staff, or admin. */
-function isClubStaff(club: Club | null): boolean {
-  return !!club && (club.isOwner || club.isManager || club.isVolunteer || club.canManage);
-}
+import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
 
 @Component({
   selector: 'app-club-discussions',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, ThreadComponent],
+  imports: [CommonModule, FormsModule, RouterModule, ThreadComponent, ConfirmDialogComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './club-discussions.component.html',
 })
@@ -57,6 +53,11 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
   saving = false;
   form = { title: '', description: '' };
   readonly expandedDiscussionIds = new Set<number>();
+
+  /** The discussion a moderator is removing, while the reason dialog is open. */
+  removing: ClubDiscussion | null = null;
+  removalReason = '';
+  removalBusy = false;
 
   private readonly destroy$ = new Subject<void>();
   private readonly threadSources = new Map<number, ThreadDataSource<ThreadDisplayItem>>();
@@ -118,6 +119,45 @@ export class ClubDiscussionsComponent implements OnInit, OnDestroy {
 
   isAuthor(discussion: ClubDiscussion): boolean {
     return !!this.currentUser && discussion.userId === this.currentUser.Id;
+  }
+
+  /** Staff and admins may remove someone else's discussion; the server checks their rank. */
+  canRemove(discussion: ClubDiscussion): boolean {
+    return this.isStaff && !!this.currentUser && !this.isAuthor(discussion);
+  }
+
+  openRemove(discussion: ClubDiscussion): void {
+    this.error = '';
+    this.success = '';
+    this.removalReason = '';
+    this.removing = discussion;
+  }
+
+  resolveRemove(confirmed: boolean): void {
+    const discussion = this.removing;
+    if (!confirmed || !discussion) {
+      this.removing = null;
+      return;
+    }
+
+    this.removalBusy = true;
+    this.discussionsService
+      .deleteDiscussion(this.clubId, discussion.id, this.removalReason.trim())
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => (this.removalBusy = false)),
+      )
+      .subscribe({
+        next: () => {
+          this.removing = null;
+          this.success = 'Discussion removed.';
+          this.resetAndFetch();
+        },
+        error: (err) => {
+          this.removing = null;
+          this.error = getApiClientMessage(err, 'Unable to remove the discussion.');
+        },
+      });
   }
 
   authorDisplay(discussion: ClubDiscussion): string {

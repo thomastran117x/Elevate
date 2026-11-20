@@ -1,5 +1,6 @@
 using backend.main.features.cache;
 using backend.main.features.clubs;
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
@@ -37,7 +38,8 @@ public class ClubPostGetByIdTests
             Mock.Of<IClubPostSearchService>(),
             Mock.Of<IClubPostSearchOutboxWriter>(),
             userRepository ?? DefaultUserRepository(),
-            cache ?? Mock.Of<IRefreshAheadCache>());
+            cache ?? Mock.Of<IRefreshAheadCache>(),
+            Mock.Of<IClubModerationLog>());
     }
 
     private static IUserRepository DefaultUserRepository()

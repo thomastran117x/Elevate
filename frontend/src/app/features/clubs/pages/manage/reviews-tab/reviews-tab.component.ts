@@ -2,18 +2,22 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Store } from '@ngrx/store';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
+import { User } from '../../../../../core/stores/user.model';
+import { selectUser } from '../../../../../core/stores/user.selectors';
+import { ConfirmDialogComponent } from '../../../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { ClubReview } from '../../../models/club-review.types';
-import { Club } from '../../../models/club.types';
+import { Club, isClubStaff } from '../../../models/club.types';
 import { ClubReviewsService } from '../../../services/club-reviews.service';
 import { ClubsService } from '../../../services/clubs.service';
 
 @Component({
   selector: 'app-reviews-tab',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ConfirmDialogComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './reviews-tab.component.html',
 })
@@ -25,6 +29,13 @@ export class ReviewsTabComponent implements OnInit {
   reviews: ClubReview[] = [];
   loading = true;
   error = '';
+  success = '';
+  currentUser: User | null = null;
+
+  /** The review a moderator is removing, while the reason dialog is open. */
+  removingReview: ClubReview | null = null;
+  reviewRemovalReason = '';
+  reviewRemovalBusy = false;
 
   page = 1;
   readonly pageSize = 20;
@@ -35,6 +46,7 @@ export class ReviewsTabComponent implements OnInit {
     private route: ActivatedRoute,
     private reviewsService: ClubReviewsService,
     private clubsService: ClubsService,
+    private store: Store,
   ) {}
 
   ngOnInit(): void {
@@ -45,8 +57,55 @@ export class ReviewsTabComponent implements OnInit {
       this.error = 'A valid club ID is required.';
       return;
     }
+    this.store
+      .select(selectUser)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((user) => (this.currentUser = user));
     this.loadClub();
     this.loadReviews();
+  }
+
+  /** Staff and admins may remove someone else's review; the server checks their rank. */
+  canRemoveReview(review: ClubReview): boolean {
+    return (
+      this.currentUser != null && review.userId !== this.currentUser.Id && isClubStaff(this.club)
+    );
+  }
+
+  openRemoveReview(review: ClubReview): void {
+    this.error = '';
+    this.success = '';
+    this.reviewRemovalReason = '';
+    this.removingReview = review;
+  }
+
+  resolveRemoveReview(confirmed: boolean): void {
+    const review = this.removingReview;
+    if (!confirmed || !review) {
+      this.removingReview = null;
+      return;
+    }
+
+    this.reviewRemovalBusy = true;
+    this.reviewsService
+      .deleteReview(this.clubId, review.id, this.reviewRemovalReason.trim())
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => {
+          this.reviewRemovalBusy = false;
+          this.removingReview = null;
+        }),
+      )
+      .subscribe({
+        next: () => {
+          this.success = 'Review removed.';
+          this.loadClub();
+          this.loadReviews();
+        },
+        error: (err) => {
+          this.error = getApiClientMessage(err, 'Unable to remove this review.');
+        },
+      });
   }
 
   get totalPages(): number {

@@ -17,10 +17,16 @@ namespace backend.main.features.clubs.discussions
         Task<(IReadOnlyList<ClubDiscussion> Discussions, IReadOnlyDictionary<int, UserListRecord> Authors, int TotalCount)>
             GetByClubIdAsync(int clubId, int? requestingUserId, string? requestingUserRole, int page, int pageSize);
 
-        /// <summary>Updates a discussion. Only the original author may do so.</summary>
-        Task<ClubDiscussion> UpdateAsync(int clubId, int discussionId, int userId, string title, string description);
+        /// <summary>
+        /// Updates a discussion. Only the original author may do so, while they still belong to the club.
+        /// </summary>
+        Task<ClubDiscussion> UpdateAsync(
+            int clubId, int discussionId, int userId, string? userRole, string title, string description);
 
-        /// <summary>Deletes a discussion. Only the original author may do so.</summary>
-        Task DeleteAsync(int clubId, int discussionId, int userId);
+        /// <summary>
+        /// Deletes a discussion: its author while they still belong to the club, staff who outrank
+        /// the author, or an admin. Removing someone else's discussion needs a reason and is logged.
+        /// </summary>
+        Task DeleteAsync(int clubId, int discussionId, int userId, string? userRole, string? reason = null);
     }
 }

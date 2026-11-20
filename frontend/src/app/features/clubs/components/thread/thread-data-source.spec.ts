@@ -105,6 +105,14 @@ describe('createDiscussionThreadSource', () => {
     expect(removed).toBeNull();
   });
 
+  it('passes a moderator’s reason through to the replies service', () => {
+    (service.deleteReply as jasmine.Spy).and.returnValue(of({ data: undefined }));
+
+    build().remove(5, 'Spam').subscribe();
+
+    expect(service.deleteReply).toHaveBeenCalledWith(1, jasmine.any(Number), 5, 'Spam');
+  });
+
   it('claims reply events for its own discussion only', () => {
     const source = build();
     const mine = reply({ id: 5, discussionId: 9 });
@@ -207,6 +215,14 @@ describe('createPostThreadSource', () => {
 
     source.react(8, 'Like').subscribe();
     expect(service.setReaction).toHaveBeenCalledWith(1, 4, 8, 'Like');
+  });
+
+  it('passes a moderator’s reason through to the comments service', () => {
+    (service.deleteComment as jasmine.Spy).and.returnValue(of({ data: comment({ id: 8 }) }));
+
+    build().remove(8, 'Spam').subscribe();
+
+    expect(service.deleteComment).toHaveBeenCalledWith(1, 4, 8, 'Spam');
   });
 
   it('claims comment events for its own post only', () => {

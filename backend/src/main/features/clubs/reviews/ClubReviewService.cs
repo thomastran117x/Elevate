@@ -1,10 +1,13 @@
 using backend.main.application.security.authorization;
 using backend.main.features.cache;
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.search;
 using backend.main.features.profile;
 using backend.main.features.profile.contracts;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
+
+using Microsoft.EntityFrameworkCore;
 
 namespace backend.main.features.clubs.reviews
 {
@@ -17,6 +20,7 @@ namespace backend.main.features.clubs.reviews
         private readonly IClubSearchOutboxWriter _outboxWriter;
         private readonly ICacheService _cache;
         private readonly IResourceAuthorizer _authorizer;
+        private readonly IClubModerationLog _moderationLog;
 
         public ClubReviewService(
             AppDatabaseContext db,
@@ -25,7 +29,8 @@ namespace backend.main.features.clubs.reviews
             IUserRepository userRepository,
             IClubSearchOutboxWriter outboxWriter,
             ICacheService cache,
-            IResourceAuthorizer authorizer)
+            IResourceAuthorizer authorizer,
+            IClubModerationLog moderationLog)
         {
             _db = db;
             _reviewRepository = reviewRepository;
@@ -34,6 +39,7 @@ namespace backend.main.features.clubs.reviews
             _outboxWriter = outboxWriter;
             _cache = cache;
             _authorizer = authorizer;
+            _moderationLog = moderationLog;
         }
 
         public async Task<ClubReview> CreateReviewAsync(int clubId, int userId, string title, int rating, string? comment)
@@ -112,7 +118,7 @@ namespace backend.main.features.clubs.reviews
             return updated;
         }
 
-        public async Task DeleteReviewAsync(int clubId, int reviewId, int userId)
+        public async Task DeleteReviewAsync(int clubId, int reviewId, int userId, string? userRole, string? reason = null)
         {
             var review = await _reviewRepository.GetByIdAsync(reviewId)
                 ?? throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
@@ -120,14 +126,67 @@ namespace backend.main.features.clubs.reviews
             if (review.ClubId != clubId)
                 throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
 
-            await EnsureAuthorAsync(review, userId, "delete");
+            // The author, staff who outrank the author in this club, or an admin.
+            var resource = new ClubContentResource(clubId, ClubModerationContentTypes.Review, review.Id, review.UserId);
+            var decision = await _authorizer.AuthorizeContentAsync(
+                ResourceActor.User(userId, userRole),
+                Permissions.ContentRemove,
+                resource,
+                new PermissionMessages("You are not allowed to delete this review."));
 
-            await _reviewRepository.DeleteAsync(reviewId);
+            var entry = decision.IsModeration
+                ? ClubModeration.Entry(
+                    resource, userId, decision, ClubModerationActionTypes.Remove, review.Title, ClubModeration.RequireReason(reason))
+                : null;
+
+            // The repository saves the delete itself, so the delete and its log entry share a
+            // transaction. The entry is staged only once a row was actually removed: if someone
+            // else deleted the review first, nothing is recorded.
+            var deleted = await ExecuteInTransactionAsync(async () =>
+            {
+                if (!await _reviewRepository.DeleteAsync(reviewId))
+                    return false;
+
+                if (entry is not null)
+                {
+                    _moderationLog.Stage(entry);
+                    await _db.SaveChangesAsync();
+                }
+                return true;
+            });
+
+            if (!deleted)
+                throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
 
             await UpdateClubRatingAsync(review.ClubId);
         }
 
-        // Known deviation recorded in the matrix: reviews are author-only, with no staff moderation.
+        /// <summary>
+        /// Runs a unit of work in a transaction through the context's execution strategy, which
+        /// refuses a user-initiated transaction unless the whole unit runs through it. Mirrors
+        /// ClubPostService's helper.
+        /// </summary>
+        private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+                try
+                {
+                    var result = await action();
+                    await transaction.CommitAsync();
+                    return result;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
+        }
+
+        // Editing stays with the author; moderators remove reviews rather than rewrite them.
         private Task EnsureAuthorAsync(ClubReview review, int userId, string action) =>
             _authorizer.EnsureAsync(
                 ResourceActor.User(userId, null),

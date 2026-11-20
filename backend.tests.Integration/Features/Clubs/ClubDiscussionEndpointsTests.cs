@@ -311,12 +311,20 @@ public class ClubDiscussionEndpointsTests
             outsiderSession.AccessToken));
         foreignDelete.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
-        // A club mismatch reads as "not found", not "forbidden".
+        // Addressed through a club the caller does not belong to, the edge refuses before the
+        // discussion is looked up (#402), so its existence is not revealed.
         var otherClubId = await CreateClubAsync(app, ownerSession.AccessToken, "Unrelated Club");
-        var mismatched = await app.Client.SendAsync(CreateAuthorizedRequest(
+        var throughForeignClub = await app.Client.SendAsync(CreateAuthorizedRequest(
             HttpMethod.Delete,
             $"/api/clubs/{otherClubId}/discussions/{discussion.Id}",
             memberSession.AccessToken));
+        throughForeignClub.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // For a caller who passes the gate in both clubs, a club mismatch reads as "not found".
+        var mismatched = await app.Client.SendAsync(CreateAuthorizedRequest(
+            HttpMethod.Delete,
+            $"/api/clubs/{otherClubId}/discussions/{discussion.Id}?reason=Mismatch",
+            ownerSession.AccessToken));
         mismatched.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         (await app.QueryDbAsync(db => db.ClubDiscussions.AnyAsync(d => d.Id == discussion.Id)))

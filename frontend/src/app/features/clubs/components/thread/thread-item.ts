@@ -24,7 +24,8 @@ export type ThreadNodeAction =
   | { type: 'loadChildren'; node: ThreadDisplayNode; append: boolean }
   | { type: 'create'; node: ThreadDisplayNode; content: string }
   | { type: 'edit'; node: ThreadDisplayNode; content: string }
-  | { type: 'delete'; node: ThreadDisplayNode }
+  /** `reason` is set when a moderator removes someone else's message. */
+  | { type: 'delete'; node: ThreadDisplayNode; reason?: string }
   | { type: 'react'; node: ThreadDisplayNode; reaction: ThreadReaction }
   /** A nested composer gained or lost content; feeds the thread-wide typing indicator. */
   | { type: 'typing'; node: ThreadDisplayNode; active: boolean };

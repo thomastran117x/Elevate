@@ -190,6 +190,14 @@
                   Delete
                 </button>
               </div>
+            } @else if (canRemove(discussion)) {
+              <button
+                type="button"
+                (click)="openRemove(discussion)"
+                class="cursor-pointer font-semibold text-danger transition hover:opacity-80"
+              >
+                Remove
+              </button>
             }
           </div>
 
@@ -207,6 +215,7 @@
             <app-thread
               [source]="threadSource(discussion.id)"
               [currentUser]="currentUser"
+              [canModerate]="isStaff"
               [initialCount]="discussion.replyCount"
               (countChange)="updateReplyCount(discussion, $event)"
             />
@@ -233,3 +242,21 @@
     }
   </main>
 </div>
+
+<app-confirm-dialog
+  [open]="!!removing"
+  [title]="'Remove this discussion?'"
+  [body]="
+    removing
+      ? 'Remove “' +
+        removing.title +
+        '” and its replies. The reason is recorded in the club’s moderation log.'
+      : ''
+  "
+  reasonLabel="Reason for removal"
+  [(reason)]="removalReason"
+  confirmLabel="Remove"
+  tone="danger"
+  [busy]="removalBusy"
+  (resolve)="resolveRemove($event)"
+/>

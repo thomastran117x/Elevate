@@ -111,6 +111,7 @@
         <app-thread
           [source]="threadSource"
           [currentUser]="currentUser"
+          [canModerate]="canModerate"
           [initialCount]="post.commentCount"
           (countChange)="updateCommentCount($event)"
         />

@@ -229,6 +229,37 @@ Captcha and external provider credentials are needed for their corresponding aut
 
 Email availability uses `POST /api/auth/email/availability` with CSRF and `{ "email": "...", "captcha": "..." }`. The response envelope is unchanged. `GET /api/auth/email/availability?email=...` remains deprecated for one compatibility release, requires the CAPTCHA token in `X-Captcha-Token`, and returns `Deprecation` plus successor `Link` headers; CAPTCHA tokens are never accepted in the query string. Availability and suggestion endpoints are rate limited; a throttled or failed availability probe is advisory and must not be interpreted as either available or taken.
 
+## Club moderation
+
+Club staff rank runs owner, then manager, then volunteer. The [authorization guide](AUTHORIZATION.md#moderation) has the full rules.
+
+- **Posts.**
+  - Any staff member can create a post.
+  - Authors edit or delete their own post while they are still staff.
+  - Managers, the owner and admins can edit or delete any post.
+  - Pinning or unpinning a post, including creating a pinned one, is limited to managers, the owner and admins. A volunteer gets `403`.
+- **Discussions, replies, comments and reviews.**
+  - Authors edit and delete their own.
+  - Staff who outrank the author in that club, and admins, can remove them but not edit them.
+  - Discussion edits and deletes need club membership (`club.contribute`), so a member who left or was removed gets `403`.
+- **Reasons.**
+  - Removing someone else's content requires a `reason` query parameter, for example `DELETE /api/clubs/{clubId}/posts/{id}?reason=Spam`.
+  - When it is missing or blank, the API answers `400`.
+  - `PUT /api/clubs/{clubId}/posts/{id}` accepts an optional `moderationReason` in the body.
+  - Reasons are plain text of up to 500 characters and follow the [human-authored text](#human-authored-request-text) rules.
+
+`GET /api/clubs/{clubId}/moderation-log?page=&pageSize=` lists a club's moderation actions, newest first, as a paged response. It is open to the club's managers, its owner, and admins (`club.manage`). Each item has these fields:
+
+- `action`: `remove`, `edit`, `pin` or `unpin`;
+- `contentType` (`Post`, `Discussion`, `Reply`, `Comment` or `Review`) and `contentId`;
+- `contentSnapshot`: the title or opening text, up to 200 characters, as it was before the action;
+- `reason`;
+- `actorClubRole`: `Owner`, `Manager`, `Volunteer` or `Admin`;
+- `actor` and `author`, as `{ id, name, username, usernameDisplay, avatar }`;
+- `createdAt`.
+
+An entry is written in the same transaction as the change it records.
+
 ## Image uploads
 
 `POST /api/profile/avatar` decodes the uploaded image and re-encodes it before storing it. The stored avatar is always WebP, and its URL ends in `.webp` whatever the uploaded file was called or what format it was in. By default the long edge is reduced to at most 512 pixels (smaller images are not enlarged), the EXIF orientation is applied, and EXIF (including GPS), IPTC, XMP, and ICC metadata are removed.

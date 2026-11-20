@@ -750,6 +750,60 @@ namespace backend.Migrations
                     b.ToTable("ClubInvitationLinks");
                 });
 
+            modelBuilder.Entity("backend.main.features.clubs.moderation.ClubModerationAction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ActorClubRole")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("ActorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AuthorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ClubId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ContentId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentSnapshot")
+                        .HasMaxLength(201)
+                        .HasColumnType("character varying(201)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClubId", "CreatedAt")
+                        .IsDescending(false, true);
+
+                    b.ToTable("ClubModerationActions");
+                });
+
             modelBuilder.Entity("backend.main.features.clubs.posts.ClubPost", b =>
                 {
                     b.Property<int>("Id")
@@ -2180,6 +2234,15 @@ namespace backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Club");
+                });
+
+            modelBuilder.Entity("backend.main.features.clubs.moderation.ClubModerationAction", b =>
+                {
+                    b.HasOne("backend.main.features.clubs.Club", null)
+                        .WithMany()
+                        .HasForeignKey("ClubId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("backend.main.features.clubs.posts.ClubPost", b =>

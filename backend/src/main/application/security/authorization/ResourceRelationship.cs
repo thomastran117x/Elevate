@@ -10,6 +10,9 @@ public enum ResourceKind
     MediaAsset,
     User,
     AuthoredContent,
+
+    /// <summary>Content in a club (a post, discussion, reply, comment or review) with a known author.</summary>
+    ClubContent,
 }
 
 /// <summary>
@@ -60,6 +63,12 @@ public enum ResourceRelationship
 
     /// <summary>The caller has a pending or succeeded payment for the event.</summary>
     Payer = 1 << 12,
+
+    /// <summary>
+    /// The caller's staff rank in the content's club (Owner, then Manager, then Volunteer) is
+    /// above the author's. Anyone who is not staff of that club has no rank.
+    /// </summary>
+    SeniorStaff = 1 << 13,
 
     /// <summary>Owner, Manager, or Volunteer.</summary>
     ClubStaff = Volunteer | Manager | Owner,

@@ -1,10 +1,21 @@
 import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subject, takeUntil } from 'rxjs';
+import {
+  Subject,
+  catchError,
+  combineLatest,
+  distinctUntilChanged,
+  map,
+  of,
+  switchMap,
+  takeUntil,
+} from 'rxjs';
 import { Store } from '@ngrx/store';
 
 import { ClubPostsService } from '../../services/club-posts.service';
+import { ClubsService } from '../../services/clubs.service';
+import { isClubStaff } from '../../models/club.types';
 import { ClubPost, POST_TYPE_STYLES } from '../../models/club-post.types';
 import { ThreadComponent } from '../../components/thread/thread.component';
 import {
@@ -30,6 +41,8 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
   loading = true;
   error = '';
   currentUser: User | null = null;
+  /** Staff and admins may remove other people's comments. */
+  canModerate = false;
 
   readonly postTypeStyles = POST_TYPE_STYLES;
 
@@ -46,6 +59,7 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
     private router: Router,
     private postsService: ClubPostsService,
     private commentsService: PostCommentsService,
+    private clubsService: ClubsService,
     private store: Store,
   ) {}
 
@@ -54,6 +68,8 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
       .select(selectUser)
       .pipe(takeUntil(this.destroy$))
       .subscribe((user) => (this.currentUser = user));
+
+    this.watchModeration();
 
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
       this.clubId = Number(params.get('clubId')) || 0;
@@ -97,6 +113,34 @@ export class ClubPostDetailComponent implements OnInit, OnDestroy {
 
   updateCommentCount(count: number): void {
     if (this.post) this.post.commentCount = count;
+  }
+
+  /**
+   * Whether the viewer may remove other people's comments in this post's club. Re-evaluated
+   * only when the club or the signed-in user actually changes, and a newer club cancels the
+   * request for the previous one, so a slow answer for another club cannot grant Remove here.
+   */
+  private watchModeration(): void {
+    const clubId$ = this.route.paramMap.pipe(map((params) => Number(params.get('clubId')) || 0));
+    const userId$ = this.store.select(selectUser).pipe(map((user) => user?.Id ?? null));
+
+    combineLatest([clubId$, userId$])
+      .pipe(
+        distinctUntilChanged(
+          ([previousClub, previousUser], [club, user]) =>
+            previousClub === club && previousUser === user,
+        ),
+        switchMap(([clubId, userId]) =>
+          clubId && userId
+            ? this.clubsService.getClub(clubId).pipe(
+                map((response) => isClubStaff(response.data ?? null)),
+                catchError(() => of(false)),
+              )
+            : of(false),
+        ),
+        takeUntil(this.destroy$),
+      )
+      .subscribe((canModerate) => (this.canModerate = canModerate));
   }
 
   private fetch(): void {

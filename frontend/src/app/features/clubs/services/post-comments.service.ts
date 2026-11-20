@@ -82,14 +82,17 @@ export class PostCommentsService {
       .pipe(map((response) => this.mapComment(response)));
   }
 
+  /** `reason` is required by the server when the caller is removing someone else's comment. */
   deleteComment(
     clubId: number,
     postId: number,
     commentId: number,
+    reason?: string,
   ): Observable<PostCommentApiResponse> {
     return this.api
       .delete<ApiEnvelope<unknown>>(`${this.commentsUrl(clubId, postId)}/${commentId}`, {
         withCredentials: true,
+        ...(reason ? { params: { reason } } : {}),
       })
       .pipe(map((response) => this.mapComment(response)));
   }

@@ -26,6 +26,7 @@ using backend.main.features.clubs.discussions.replies;
 using backend.main.features.clubs.follow;
 using backend.main.features.clubs.follow.invitations;
 using backend.main.features.clubs.invitations;
+using backend.main.features.clubs.moderation;
 using backend.main.features.clubs.posts;
 using backend.main.features.clubs.posts.comments;
 using backend.main.features.clubs.posts.search;
@@ -329,6 +330,7 @@ namespace backend.main.application.bootstrap
             services.AddScoped<ISessionManagementService, SessionManagementService>();
             services.AddScoped<ILoginStepUpChallengeService, LoginStepUpChallengeService>();
             services.AddScoped<IClubPostService, ClubPostService>();
+            services.AddScoped<IClubModerationLog, ClubModerationLog>();
             services.AddSingleton<IClubPresenceStore, ClubPresenceStore>();
             services.AddSingleton<IClubRealtimeNotifier, ClubRealtimeNotifier>();
             services.AddSingleton<IRefreshAheadCache, RefreshAheadCache>();

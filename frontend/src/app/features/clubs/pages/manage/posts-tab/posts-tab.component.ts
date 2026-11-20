@@ -3,12 +3,18 @@ import { Component, DestroyRef, OnInit, inject, ChangeDetectionStrategy } from '
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { Store } from '@ngrx/store';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { getApiClientMessage } from '../../../../../core/api/models/api-client-error.model';
+import { User } from '../../../../../core/stores/user.model';
+import { selectUser } from '../../../../../core/stores/user.selectors';
+import { ConfirmDialogComponent } from '../../../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { ClubPost, POST_TYPE_STYLES, PostType } from '../../../models/club-post.types';
+import { Club } from '../../../models/club.types';
 import { ClubPostsService } from '../../../services/club-posts.service';
+import { ClubsService } from '../../../services/clubs.service';
 
 const TITLE_MAX = 150;
 const CONTENT_MAX = 2000;
@@ -16,7 +22,7 @@ const CONTENT_MAX = 2000;
 @Component({
   selector: 'app-posts-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ConfirmDialogComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './posts-tab.component.html',
 })
@@ -51,9 +57,18 @@ export class PostsTabComponent implements OnInit {
   deletingId: number | null = null;
   pinningId: number | null = null;
 
+  club: Club | null = null;
+  currentUser: User | null = null;
+
+  /** Someone else's post a manager is removing, while the reason dialog is open. */
+  removingPost: ClubPost | null = null;
+  postRemovalReason = '';
+
   constructor(
     private route: ActivatedRoute,
     private postsService: ClubPostsService,
+    private clubsService: ClubsService,
+    private store: Store,
   ) {}
 
   ngOnInit(): void {
@@ -64,6 +79,18 @@ export class PostsTabComponent implements OnInit {
       this.error = 'A valid club ID is required.';
       return;
     }
+    this.store
+      .select(selectUser)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((user) => (this.currentUser = user));
+    this.clubsService
+      .getClub(this.clubId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => (this.club = response.data ?? null),
+        // Without the club the page falls back to the volunteer view; the server decides anyway.
+        error: () => (this.club = null),
+      });
     this.load();
 
     this.searchInput$
@@ -81,6 +108,36 @@ export class PostsTabComponent implements OnInit {
 
   get totalPages(): number {
     return Math.max(1, Math.ceil(this.totalCount / this.pageSize));
+  }
+
+  /** Managers, the owner and admins pin posts and manage everyone's; volunteers only their own. */
+  get canManagePosts(): boolean {
+    return !!this.club?.canManage;
+  }
+
+  isOwnPost(post: ClubPost): boolean {
+    return !!this.currentUser && post.userId === this.currentUser.Id;
+  }
+
+  canChange(post: ClubPost): boolean {
+    return this.canManagePosts || this.isOwnPost(post);
+  }
+
+  requestDelete(post: ClubPost): void {
+    if (this.isOwnPost(post)) {
+      this.deletePost(post);
+      return;
+    }
+    this.error = '';
+    this.success = '';
+    this.postRemovalReason = '';
+    this.removingPost = post;
+  }
+
+  resolveRemovePost(confirmed: boolean): void {
+    const post = this.removingPost;
+    this.removingPost = null;
+    if (confirmed && post) this.deletePost(post, this.postRemovalReason.trim());
   }
 
   openCreate(): void {
@@ -180,20 +237,20 @@ export class PostsTabComponent implements OnInit {
       });
   }
 
-  deletePost(post: ClubPost): void {
+  deletePost(post: ClubPost, reason?: string): void {
     this.deletingId = post.id;
     this.error = '';
     this.success = '';
 
     this.postsService
-      .deletePost(this.clubId, post.id)
+      .deletePost(this.clubId, post.id, reason)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => (this.deletingId = null)),
       )
       .subscribe({
         next: () => {
-          this.success = 'Post deleted.';
+          this.success = reason ? 'Post removed.' : 'Post deleted.';
           this.posts = this.posts.filter((p) => p.id !== post.id);
           this.totalCount = Math.max(0, this.totalCount - 1);
         },

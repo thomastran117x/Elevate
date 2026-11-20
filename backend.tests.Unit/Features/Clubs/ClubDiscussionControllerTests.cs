@@ -119,7 +119,7 @@ public class ClubDiscussionControllerTests
     public async Task UpdateDiscussion_ShouldReturnUpdatedResponse()
     {
         var service = new Mock<IClubDiscussionService>();
-        service.Setup(s => s.UpdateAsync(4, 9, 7, "Updated", "Updated body"))
+        service.Setup(s => s.UpdateAsync(4, 9, 7, "Participant", "Updated", "Updated body"))
             .ReturnsAsync(new ClubDiscussion
             {
                 Id = 9,
@@ -149,13 +149,13 @@ public class ClubDiscussionControllerTests
         var service = new Mock<IClubDiscussionService>();
         var controller = CreateController(service.Object);
 
-        var result = await controller.DeleteDiscussion(4, 9);
+        var result = await controller.DeleteDiscussion(4, 9, "Spam");
 
         var ok = result.Should().BeOfType<ObjectResult>().Subject;
         ok.StatusCode.Should().Be(200);
         var response = ok.Value.Should().BeOfType<MessageResponse>().Subject;
         response.Message.Should().Contain("Discussion with ID 9 has been deleted successfully.");
-        service.Verify(s => s.DeleteAsync(4, 9, 7), Times.Once);
+        service.Verify(s => s.DeleteAsync(4, 9, 7, "Participant", "Spam"), Times.Once);
     }
 
     private static ClubDiscussionController CreateController(

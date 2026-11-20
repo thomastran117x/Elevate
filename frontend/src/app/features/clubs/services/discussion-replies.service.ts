@@ -80,14 +80,17 @@ export class DiscussionRepliesService {
       .pipe(map((response) => this.mapReply(response)));
   }
 
+  /** `reason` is required by the server when the caller is removing someone else's reply. */
   deleteReply(
     clubId: number,
     discussionId: number,
     replyId: number,
+    reason?: string,
   ): Observable<DiscussionReplyApiResponse> {
     return this.api
       .delete<ApiEnvelope<unknown>>(`${this.repliesUrl(clubId, discussionId)}/${replyId}`, {
         withCredentials: true,
+        ...(reason ? { params: { reason } } : {}),
       })
       .pipe(map((response) => this.mapReply(response)));
   }
