@@ -35,6 +35,21 @@ public class ClubModerationLogTests
     }
 
     [Fact]
+    public async Task Stage_ShouldWriteAnEntryOnce_WhenARetriedUnitStagesItAgain()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var entry = Entry(ClubId, contentId: 1, DateTime.UtcNow);
+
+        harness.Log.Stage(entry);
+        harness.Log.Stage(entry);
+        await harness.Db.SaveChangesAsync();
+        harness.Log.Stage(entry);
+        await harness.Db.SaveChangesAsync();
+
+        (await harness.Db.ClubModerationActions.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
     public async Task GetPageAsync_ShouldReturnTheClubsEntriesNewestFirst_AndPage()
     {
         await using var harness = await Harness.CreateAsync();

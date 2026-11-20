@@ -87,8 +87,8 @@ public sealed class ClubRelationshipResolver
     /// Resolves the caller's relationships to content in a club. Returns <c>null</c> when the club
     /// does not exist. The caller holds <see cref="Author"/> when they wrote the content, and
     /// <see cref="SeniorStaff"/> when their staff rank in the club is above the author's. Staff
-    /// roles are read only when <paramref name="relevant"/> needs them and nothing relevant is
-    /// already held.
+    /// roles are read when <paramref name="relevant"/> needs them and the caller is not the
+    /// author, including for admins, so their club role is known.
     /// </summary>
     public async Task<ClubRelationship?> ResolveContentAsync(
         ResourceActor actor,
@@ -112,7 +112,10 @@ public sealed class ClubRelationshipResolver
         if (userId == authorUserId)
             held |= Author;
 
-        if ((held & relevant) != 0 || (relevant & (ResourceRelationship.ClubStaff | SeniorStaff)) == 0)
+        // Authors act on their own content as authors, so staff roles are not needed. Anyone else
+        // has their club rank read even when Admin alone would pass: the moderation log records
+        // the capacity they acted in, and an admin who owns the club acted as its owner.
+        if ((held & Author) != 0 || (relevant & (ResourceRelationship.ClubStaff | SeniorStaff)) == 0)
             return new ClubRelationship(clubId, club.isPrivate, held);
 
         var roles = await _db.ClubStaff

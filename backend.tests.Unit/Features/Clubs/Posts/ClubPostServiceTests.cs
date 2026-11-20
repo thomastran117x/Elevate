@@ -535,6 +535,67 @@ public class ClubPostServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_ShouldNotLog_WhenAModeratorSavesWithoutChangingAnything()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync();
+        harness.Access.Manager(harness.ClubId, harness.UserId);
+        var post = harness.BuildPost(userId: harness.SecondUserId, isPinned: true);
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(post);
+        harness.PostRepositoryMock
+            .Setup(repo => repo.UpdateAsync(harness.PostId, It.IsAny<ClubPost>()))
+            .ReturnsAsync(post);
+
+        await harness.Service.UpdateAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole,
+            post.Title, post.Content, post.PostType, post.IsPinned, "No change");
+
+        harness.Staged.Should().BeEmpty("an unchanged save is not an edit");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldIgnoreTheModerationReason_OnTheAuthorsOwnEdit()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync();
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost());
+        harness.PostRepositoryMock
+            .Setup(repo => repo.UpdateAsync(harness.PostId, It.IsAny<ClubPost>()))
+            .ReturnsAsync(harness.BuildPost(title: "Fixed"));
+
+        var result = await harness.Service.UpdateAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole,
+            "Fixed", "Post content", PostType.General, false, "<b>not a moderator</b>");
+
+        result.Title.Should().Be("Fixed");
+        harness.Staged.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldReportNotFound_AndLogNothing_WhenThePostIsAlreadyGone()
+    {
+        await using var harness = await ClubPostServiceHarness.CreateAsync(ownerId: 30);
+        harness.Access.Manager(harness.ClubId, harness.UserId);
+        harness.PostRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(harness.PostId))
+            .ReturnsAsync(harness.BuildPost(userId: 30));
+        harness.PostRepositoryMock
+            .Setup(repo => repo.DeleteAsync(harness.PostId))
+            .ReturnsAsync(false);
+
+        var action = () => harness.Service.DeleteAsync(
+            harness.ClubId, harness.PostId, harness.UserId, harness.UserRole, "Outdated");
+
+        await action.Should()
+            .ThrowAsync<ResourceNotFoundException>()
+            .WithMessage($"Post with ID {harness.PostId} was not found.");
+        harness.Staged.Should().BeEmpty("a removal that never happened must not be logged");
+        harness.OutboxWriterMock.Verify(writer => writer.StageDelete(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
     public async Task DeleteAsync_ShouldDeletePost_StageDelete_AndInvalidateCache()
     {
         await using var harness = await ClubPostServiceHarness.CreateAsync();

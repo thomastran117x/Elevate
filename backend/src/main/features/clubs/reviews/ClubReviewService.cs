@@ -7,6 +7,8 @@ using backend.main.features.profile.contracts;
 using backend.main.infrastructure.database.core;
 using backend.main.shared.exceptions.http;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace backend.main.features.clubs.reviews
 {
     public class ClubReviewService : IClubReviewService
@@ -132,17 +134,56 @@ namespace backend.main.features.clubs.reviews
                 resource,
                 new PermissionMessages("You are not allowed to delete this review."));
 
-            if (decision.IsModeration)
-            {
-                var moderationReason = ClubModeration.RequireReason(reason);
-                // Staged before the delete so it commits in the repository's save.
-                _moderationLog.Stage(ClubModeration.Entry(
-                    resource, userId, decision, ClubModerationActionTypes.Remove, review.Title, moderationReason));
-            }
+            var entry = decision.IsModeration
+                ? ClubModeration.Entry(
+                    resource, userId, decision, ClubModerationActionTypes.Remove, review.Title, ClubModeration.RequireReason(reason))
+                : null;
 
-            await _reviewRepository.DeleteAsync(reviewId);
+            // The repository saves the delete itself, so the delete and its log entry share a
+            // transaction. The entry is staged only once a row was actually removed: if someone
+            // else deleted the review first, nothing is recorded.
+            var deleted = await ExecuteInTransactionAsync(async () =>
+            {
+                if (!await _reviewRepository.DeleteAsync(reviewId))
+                    return false;
+
+                if (entry is not null)
+                {
+                    _moderationLog.Stage(entry);
+                    await _db.SaveChangesAsync();
+                }
+                return true;
+            });
+
+            if (!deleted)
+                throw new ResourceNotFoundException($"Review with ID {reviewId} was not found.");
 
             await UpdateClubRatingAsync(review.ClubId);
+        }
+
+        /// <summary>
+        /// Runs a unit of work in a transaction through the context's execution strategy, which
+        /// refuses a user-initiated transaction unless the whole unit runs through it. Mirrors
+        /// ClubPostService's helper.
+        /// </summary>
+        private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+                try
+                {
+                    var result = await action();
+                    await transaction.CommitAsync();
+                    return result;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         // Editing stays with the author; moderators remove reviews rather than rewrite them.

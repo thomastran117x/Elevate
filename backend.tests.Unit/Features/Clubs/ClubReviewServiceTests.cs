@@ -238,6 +238,48 @@ public class ClubReviewServiceTests
     }
 
     [Fact]
+    public async Task DeleteReviewAsync_ShouldReportNotFound_AndLogNothing_WhenTheReviewIsAlreadyGone()
+    {
+        await using var harness = await ClubReviewServiceHarness.CreateAsync();
+        await harness.SeedClubAsync();
+        harness.SetupClubPartialUpdates();
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(37))
+            .ReturnsAsync(new ClubReview { Id = 37, ClubId = harness.ClubId, UserId = harness.OtherUserId, Title = "Rant" });
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.DeleteAsync(37))
+            .ReturnsAsync(false);
+
+        var action = () => harness.Service.DeleteReviewAsync(harness.ClubId, 37, harness.UserId, "Organizer", "Spam");
+
+        await action.Should()
+            .ThrowAsync<ResourceNotFoundException>()
+            .WithMessage("Review with ID 37 was not found.");
+        (await harness.Db.ClubModerationActions.AnyAsync()).Should().BeFalse(
+            "a removal that never happened must not be logged");
+    }
+
+    [Fact]
+    public async Task DeleteReviewAsync_ShouldLogAnAdminWhoOwnsTheClubAsTheOwner()
+    {
+        await using var harness = await ClubReviewServiceHarness.CreateAsync();
+        await harness.SeedClubAsync();
+        harness.SetupClubPartialUpdates();
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.GetByIdAsync(38))
+            .ReturnsAsync(new ClubReview { Id = 38, ClubId = harness.ClubId, UserId = harness.OtherUserId, Title = "Rant" });
+        harness.ReviewRepositoryMock
+            .Setup(repo => repo.DeleteAsync(38))
+            .ReturnsAsync(true);
+
+        // The club's owner also holds the global Admin role.
+        await harness.Service.DeleteReviewAsync(harness.ClubId, 38, harness.UserId, "Admin", "Spam");
+
+        var entry = await harness.Db.ClubModerationActions.SingleAsync();
+        entry.ActorClubRole.Should().Be(ClubModerationRoles.Owner);
+    }
+
+    [Fact]
     public async Task DeleteReviewAsync_ShouldLetAnAdminRemoveTheOwnersReview()
     {
         await using var harness = await ClubReviewServiceHarness.CreateAsync();

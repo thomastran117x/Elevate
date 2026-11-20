@@ -172,18 +172,21 @@ namespace backend.main.features.clubs.posts
             if (pinChanged)
                 await EnsureCanPinAsync(clubId, userId, userRole);
 
-            var reason = ClubModeration.OptionalReason(moderationReason);
+            // A moderator's save is logged only when it changes something, and only then is the
+            // reason read: an author's own edit never uses it.
             var contentChanged = existing.Title != title || existing.Content != content || existing.PostType != postType;
-            var action = contentChanged || !pinChanged
-                ? ClubModerationActionTypes.Edit
-                : isPinned ? ClubModerationActionTypes.Pin : ClubModerationActionTypes.Unpin;
-            var snapshot = existing.Title;
+            ClubModerationAction? entry = null;
+            if (decision.IsModeration && (contentChanged || pinChanged))
+            {
+                var action = contentChanged
+                    ? ClubModerationActionTypes.Edit
+                    : isPinned ? ClubModerationActionTypes.Pin : ClubModerationActionTypes.Unpin;
+                entry = ClubModeration.Entry(
+                    resource, userId, decision, action, existing.Title, ClubModeration.OptionalReason(moderationReason));
+            }
 
             var updated = await ExecuteInTransactionAsync(async () =>
             {
-                if (decision.IsModeration)
-                    _moderationLog.Stage(ClubModeration.Entry(resource, userId, decision, action, snapshot, reason));
-
                 var post = await _postRepository.UpdateAsync(postId, new ClubPost
                 {
                     Title = title,
@@ -192,6 +195,11 @@ namespace backend.main.features.clubs.posts
                     IsPinned = isPinned
                 }) ?? throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
 
+                // Staged after the write succeeds. The entry is built once, outside this retryable
+                // unit, so an execution-strategy retry re-stages the same instance instead of
+                // adding a second one.
+                if (entry is not null)
+                    _moderationLog.Stage(entry);
                 _outboxWriter.StageUpsert(post);
                 await _db.SaveChangesAsync();
                 return post;
@@ -219,23 +227,28 @@ namespace backend.main.features.clubs.posts
                 Permissions.PostManage,
                 resource,
                 new PermissionMessages(DeleteForbiddenMessage));
-            var moderationReason = decision.IsModeration ? ClubModeration.RequireReason(reason) : null;
+            var entry = decision.IsModeration
+                ? ClubModeration.Entry(
+                    resource, userId, decision, ClubModerationActionTypes.Remove, post.Title, ClubModeration.RequireReason(reason))
+                : null;
 
-            await ExecuteInTransactionAsync(async () =>
+            var deleted = await ExecuteInTransactionAsync(async () =>
             {
-                if (decision.IsModeration)
-                {
-                    _moderationLog.Stage(ClubModeration.Entry(
-                        resource, userId, decision, ClubModerationActionTypes.Remove, post.Title, moderationReason));
-                }
+                // Someone else may have deleted it since it was read; then nothing is recorded.
+                if (!await _postRepository.DeleteAsync(postId))
+                    return false;
 
-                await _postRepository.DeleteAsync(postId);
+                // Built once outside this retryable unit, so a retry re-stages the same entry.
+                if (entry is not null)
+                    _moderationLog.Stage(entry);
                 _outboxWriter.StageDelete(postId);
                 await _db.SaveChangesAsync();
                 return true;
             });
 
             await _cache.RemoveAsync(PostCacheKey(postId));
+            if (!deleted)
+                throw new ResourceNotFoundException($"Post with ID {postId} was not found.");
         }
 
         private Task EnsureCanReadAsync(int clubId, int? userId, string? userRole) =>

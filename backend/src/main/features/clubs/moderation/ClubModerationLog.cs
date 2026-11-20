@@ -18,7 +18,11 @@ public sealed class ClubModerationLog : IClubModerationLog
         _authorizer = authorizer;
     }
 
-    public void Stage(ClubModerationAction entry) => _db.ClubModerationActions.Add(entry);
+    public void Stage(ClubModerationAction entry)
+    {
+        if (_db.Entry(entry).State == EntityState.Detached)
+            _db.ClubModerationActions.Add(entry);
+    }
 
     public async Task<(IReadOnlyList<ClubModerationAction> Items, int TotalCount)> GetPageAsync(
         int clubId, int userId, string? userRole, int page, int pageSize, CancellationToken cancellationToken = default)
