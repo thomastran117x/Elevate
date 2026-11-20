@@ -10,7 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { finalize } from 'rxjs/operators';
+import { Subject, catchError, map, of, switchMap, tap } from 'rxjs';
 
 import { getApiClientMessage } from '../../../../../../core/api/models/api-client-error.model';
 import { ClubModerationLogItem } from '../../../../models/club-moderation.types';
@@ -49,14 +49,41 @@ export class ModerationLogComponent implements OnInit {
   private readonly moderation = inject(ClubModerationService);
   private readonly destroyRef = inject(DestroyRef);
 
+  /** Each requested page; a newer request cancels the one in flight, so pages never arrive out of order. */
+  private readonly pageRequests = new Subject<number>();
+
   ngOnInit(): void {
-    this.load();
+    this.pageRequests
+      .pipe(
+        tap(() => {
+          this.loading.set(true);
+          this.error.set('');
+        }),
+        switchMap((page) =>
+          this.moderation.getModerationLog(this.clubId(), page, this.pageSize).pipe(
+            map((response) => ({ response, failure: null as unknown })),
+            catchError((failure: unknown) => of({ response: null, failure })),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(({ response, failure }) => {
+        this.loading.set(false);
+        if (failure) {
+          this.error.set(getApiClientMessage(failure, 'Unable to load the moderation log.'));
+          return;
+        }
+        this.items.set(response?.data?.items ?? []);
+        this.totalCount.set(response?.data?.totalCount ?? 0);
+      });
+
+    this.pageRequests.next(this.page());
   }
 
   goToPage(page: number): void {
     if (page < 1 || page > this.totalPages() || page === this.page()) return;
     this.page.set(page);
-    this.load();
+    this.pageRequests.next(page);
   }
 
   summary(item: ClubModerationLogItem): string {
@@ -65,24 +92,5 @@ export class ModerationLogComponent implements OnInit {
 
   partyName(party: AuthorInfo): string {
     return party.name || party.usernameDisplay || party.username || `User #${party.id}`;
-  }
-
-  private load(): void {
-    this.loading.set(true);
-    this.error.set('');
-    this.moderation
-      .getModerationLog(this.clubId(), this.page(), this.pageSize)
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.loading.set(false)),
-      )
-      .subscribe({
-        next: (response) => {
-          this.items.set(response.data?.items ?? []);
-          this.totalCount.set(response.data?.totalCount ?? 0);
-        },
-        error: (err) =>
-          this.error.set(getApiClientMessage(err, 'Unable to load the moderation log.')),
-      });
   }
 }

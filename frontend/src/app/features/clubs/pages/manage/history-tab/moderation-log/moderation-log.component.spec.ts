@@ -1,10 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { envelope } from '@testing';
 
-import { ClubModerationLogItem } from '../../../../models/club-moderation.types';
+import {
+  ClubModerationLogApiResponse,
+  ClubModerationLogItem,
+} from '../../../../models/club-moderation.types';
 import { ClubModerationService } from '../../../../services/club-moderation.service';
 import { ModerationLogComponent } from './moderation-log.component';
 
@@ -105,6 +108,56 @@ describe('ModerationLogComponent', () => {
     component.goToPage(4);
     component.goToPage(2);
     expect(service.getModerationLog).not.toHaveBeenCalled();
+  });
+
+  it('shows the latest requested page even when an earlier page answers last', () => {
+    service.getModerationLog.and.returnValue(page([makeItem({ id: 1 })], 25));
+    fixture.detectChanges();
+
+    const pageTwo = new Subject<ClubModerationLogApiResponse>();
+    const pageThree = new Subject<ClubModerationLogApiResponse>();
+    service.getModerationLog.and.callFake((_club: number, requested: number) =>
+      requested === 2 ? pageTwo : pageThree,
+    );
+
+    component.goToPage(2);
+    component.goToPage(3);
+    pageThree.next(
+      envelope({
+        items: [makeItem({ id: 3 })],
+        totalCount: 25,
+        page: 3,
+        pageSize: 10,
+        totalPages: 3,
+      }),
+    );
+    pageTwo.next(
+      envelope({
+        items: [makeItem({ id: 2 })],
+        totalCount: 25,
+        page: 2,
+        pageSize: 10,
+        totalPages: 3,
+      }),
+    );
+
+    expect(component.page()).toBe(3);
+    expect(component.items().map((item) => item.id)).toEqual([3]);
+    expect(component.loading()).toBeFalse();
+  });
+
+  it('keeps loading later pages after one fails', () => {
+    service.getModerationLog.and.returnValue(page([makeItem({ id: 1 })], 25));
+    fixture.detectChanges();
+
+    service.getModerationLog.and.returnValue(throwError(() => new Error('timeout')));
+    component.goToPage(2);
+    expect(component.error()).toBeTruthy();
+
+    service.getModerationLog.and.returnValue(page([makeItem({ id: 3 })], 25));
+    component.goToPage(3);
+    expect(component.error()).toBe('');
+    expect(component.items().map((item) => item.id)).toEqual([3]);
   });
 
   it('labels every action and falls back to the user id for an unknown user', () => {
